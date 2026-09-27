@@ -14,6 +14,7 @@
   - [How Files Are Read and Written](#how-files-are-read-and-written)
   - [Validation](#validation)
   - [Your Own Node Types](#your-own-node-types)
+  - [The HTTP API](#the-http-api)
   - [Project Layout](#project-layout)
   - [Monitoring a Run from Another Server](#monitoring-a-run-from-another-server)
 
@@ -161,6 +162,22 @@ std::cout << BT::writeTreeNodesModelXML(factory, false);
 ```
 
 Save the output in the folder, e.g. `models/my_nodes.xml`, and add a test that fails when it is out of date. The editor shows a file of models only as a list of node types, and does not let you edit a model in a file whose header comment says it is generated. XML files that are not behaviors (whose first element is not `<root>`, like a ROS `package.xml`) are ignored.
+
+## The HTTP API
+
+The editor reads and writes the folder through a small HTTP API, which the server documents itself. With the editor running, open:
+
+- <http://localhost:8080/api/docs>: the documentation in [Swagger UI](https://swagger.io/tools/swagger-ui/), with every endpoint, its parameters, its responses and their schemas. **Try it out** on an endpoint sends a real request and shows the answer.
+- <http://localhost:8080/api/openapi.json>: the same description in [OpenAPI](https://www.openapis.org/) 3.1, to read with other tools, e.g. to generate a client.
+
+To try the API by hand in [Postman](https://www.postman.com/) instead, import the description: **Import**, paste `http://localhost:8080/api/openapi.json`, and choose to generate a collection. Postman makes a request for every endpoint, with its parameters and example bodies, ready to send to the address it imported the description from. Use the desktop app: the web version of Postman cannot reach `localhost` without the Postman Desktop Agent.
+
+The documentation and the description are served on the port of the editor, so use the host port chosen with `EDITOR_PORT`, `5173` with the development server, and the address of the machine rather than `localhost` from another computer. The documentation is served with the editor and needs no internet connection.
+
+> [!WARNING]
+> The requests act on the open folder: trying a `PUT` or a `DELETE` changes the files on disk.
+
+The description is written by hand in [`src/server/openapi.ts`](src/server/openapi.ts): a change to the API in [`src/server/api.ts`](src/server/api.ts) has to be made there too.
 
 ## Project Layout
 

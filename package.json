@@ -17,6 +17,7 @@
     "@xmldom/xmldom": "^0.9.12",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
+    "swagger-ui-dist": "^5.33.0",
     "tsx": "^4.23.15",
     "zustand": "^5.0.15"
   },
