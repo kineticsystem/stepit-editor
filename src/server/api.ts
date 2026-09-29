@@ -2,27 +2,33 @@
 // so that the Vite development server and the production server share it.
 //
 //   GET    /api/workspace         The folder, its XML files, their contents and ETags
-//   PUT    /api/file?path=a.xml   Create or overwrite a file (body: the XML)
-//   DELETE /api/file?path=a.xml   Delete a file
+//   PUT    /api/files/a/b.xml     Create or overwrite a file (body: the XML)
+//   DELETE /api/files/a/b.xml     Delete a file
 //   POST   /api/validate          Validate with BehaviorTree.CPP
 //                                 (body: {files: [{path, content}]})
 //   GET    /api/folders?path=/a   The sub-folders of a folder, to choose one
 //   PUT    /api/root              Open another folder (body: {path})
+//   GET    /api/openapi.json      The OpenAPI description of the above
+//   GET    /api/docs              Swagger UI, to browse and try the API
 //
 // Writes are conditional, so that nobody overwrites a change they have not
 // seen: PUT and DELETE take the ETag of the version the editor read in
 // If-Match, or If-None-Match: * to create a file only if it does not exist,
-// and fail with 412 Precondition Failed otherwise. They also take the folder
+// and fail with 412 Precondition Failed otherwise. PUT answers 201 Created
+// when the file did not exist, and 200 OK when it overwrote it. They also take the folder
 // the editor loaded in X-Behaviors-Root, and fail with 409 Conflict if another
 // folder was opened since, e.g. from another tab.
 
+import { createReadStream } from 'node:fs';
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { createRequire } from 'node:module';
 import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { basename, dirname, isAbsolute, join, resolve, sep } from 'node:path';
 import type { NodeModel } from '../shared/types';
 import { etagOf, isIgnoredFolder, isXmlFile, listXmlFiles, readBehaviorFiles, type StoredFile, type WorkspaceFile } from './files';
 import { nativeBuiltins, nativeValidatorPath, validateNative } from './native';
+import { DOCS_HTML, OPENAPI } from './openapi';
 
 export type { WorkspaceFile } from './files';
 
@@ -52,8 +58,42 @@ export interface ConflictResponse {
 /** The header that carries the folder the editor loaded. */
 export const ROOT_HEADER = 'x-behaviors-root';
 
+/** The prefix of the URL of a file: the rest is its path in the folder. */
+const FILES = '/api/files/';
+
+/** The path of the file that a URL under FILES names, e.g. a/b.xml. */
+function filePathOf(url: URL): string {
+  try {
+    return decodeURIComponent(url.pathname.slice(FILES.length));
+  } catch {
+    throw new HttpError(400, 'The path is not valid URL encoding');
+  }
+}
+
+/**
+ * The address the client reached the server at, e.g. http://localhost:8080,
+ * for the OpenAPI description: tools that import it, like Postman, need an
+ * absolute address. It comes from the Host header, so it is right behind
+ * Docker's port mapping and from other machines too.
+ */
+function serverUrl(req: IncomingMessage): string {
+  const host = req.headers.host;
+  if (!host) return '/';
+  const forwarded = req.headers['x-forwarded-proto'];
+  const scheme = typeof forwarded === 'string' ? forwarded.split(',')[0].trim() : 'http';
+  return `${scheme}://${host}`;
+}
+
 /** The largest request body accepted, far above any behavior file. */
 const MAX_BODY = 10 * 1024 * 1024;
+
+/** The files of Swagger UI that /api/docs loads, and their types. */
+const SWAGGER_UI = dirname(createRequire(import.meta.url).resolve('swagger-ui-dist/package.json'));
+const DOCS_FILES: Record<string, string> = {
+  'swagger-ui.css': 'text/css',
+  'swagger-ui-bundle.js': 'text/javascript',
+  'favicon-32x32.png': 'image/png',
+};
 
 class HttpError extends Error {
   constructor(public status: number, message: string, public data: Record<string, unknown> = {}) {
@@ -210,22 +250,25 @@ export function createApi(initialRoot: string, options: ApiOptions = {}) {
           root, files, builtins: await builtins, nativeValidator: !!nativeValidatorPath(),
         };
         send(res, 200, response);
-      } else if (route === 'PUT /api/file') {
+      } else if (route.startsWith(`PUT ${FILES}`)) {
         checkRoot(req);
-        const path = url.searchParams.get('path');
+        const path = filePathOf(url);
         const full = safePath(root, path);
         const content = await body(req);
-        await checkPreconditions(req, full, path!);
+        await checkPreconditions(req, full, path);
+        const existed = await stat(full).then(() => true, () => false);
         await writeAtomically(full, content);
         const etag = etagOf(content);
-        send(res, 200, { etag }, { ETag: etag });
-      } else if (route === 'DELETE /api/file') {
+        send(res, existed ? 200 : 201, { etag }, { ETag: etag });
+      } else if (route.startsWith(`DELETE ${FILES}`)) {
         checkRoot(req);
-        const path = url.searchParams.get('path');
+        const path = filePathOf(url);
         const full = safePath(root, path);
-        await checkPreconditions(req, full, path!);
+        await checkPreconditions(req, full, path);
         await rm(full, { force: true });
         send(res, 200, { ok: true });
+      } else if (url.pathname.startsWith(FILES)) {
+        send(res, 405, { error: `${req.method} is not allowed on a file` }, { Allow: 'PUT, DELETE' });
       } else if (route === 'POST /api/validate') {
         checkRoot(req);
         const { files } = await jsonBody<{ files: WorkspaceFile[] }>(req);
@@ -239,6 +282,15 @@ export function createApi(initialRoot: string, options: ApiOptions = {}) {
         root = await folderPath(path);
         console.log(`Behaviors folder: ${root}`);
         send(res, 200, { root });
+      } else if (route === 'GET /api/openapi.json') {
+        send(res, 200, { ...OPENAPI, servers: [{ url: serverUrl(req) }] });
+      } else if (route === 'GET /api/docs') {
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        res.end(DOCS_HTML);
+      } else if (req.method === 'GET' && Object.hasOwn(DOCS_FILES, url.pathname.replace('/api/docs/', ''))) {
+        const name = url.pathname.replace('/api/docs/', '');
+        res.setHeader('Content-Type', DOCS_FILES[name]);
+        createReadStream(join(SWAGGER_UI, name)).pipe(res);
       } else {
         send(res, 404, { error: `No route ${route}` });
       }

@@ -183,8 +183,8 @@ The checks are pure functions of the workspace: they return a list of `Issue`s a
 | Route | Purpose |
 |---|---|
 | `GET /api/workspace` | The folder, the content and the ETag of every behavior file in it, and the built-in nodes. |
-| `PUT /api/file?path=a.xml` | Create or overwrite a file with the request body, if it is the version expected. |
-| `DELETE /api/file?path=a.xml` | Delete a file, if it is the version expected. |
+| `PUT /api/files/a/b.xml` | Create (201) or overwrite (200) a file with the request body, if it is the version expected. |
+| `DELETE /api/files/a/b.xml` | Delete a file, if it is the version expected. |
 | `POST /api/validate` | Validate the given contents with BehaviorTree.CPP. |
 | `GET /api/folders?path=/a` | The sub-folders of a folder, for the *Open folder* dialog. |
 | `PUT /api/root` | Open another folder. |

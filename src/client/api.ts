@@ -51,7 +51,8 @@ export function isConflict(e: unknown): e is ApiError & { data: ConflictResponse
   return e instanceof ApiError && e.status === 412;
 }
 
-const fileUrl = (path: string) => `/api/file?path=${encodeURIComponent(path)}`;
+/** The URL of a file: its path, a/b.xml, with each part encoded. */
+const fileUrl = (path: string) => `/api/files/${path.split('/').map(encodeURIComponent).join('/')}`;
 
 export const api = {
   workspace: () => request<WorkspaceResponse>('/api/workspace'),

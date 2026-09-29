@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { createApi, safePath } from '../src/server/api';
 import { etagOf } from '../src/server/files';
+import { OPENAPI } from '../src/server/openapi';
 
 describe('safePath', () => {
   it('resolves files inside the root', () => {
@@ -31,7 +32,7 @@ describe('the API', () => {
     return { status: res.status, etag: res.headers.get('etag'), data: await res.json() as Record<string, unknown> };
   };
   const put = (path: string, body: string, headers: Record<string, string> = {}) =>
-    call('PUT', `/api/file?path=${encodeURIComponent(path)}`, { body, headers });
+    call('PUT', `/api/files/${path}`, { body, headers });
   const onDisk = (path: string) => readFile(join(root, path), 'utf8');
 
   beforeAll(async () => {
@@ -67,7 +68,7 @@ describe('the API', () => {
     expect(data.nativeValidator).toBe(false);
   });
 
-  it('saves over the version read, and returns the new ETag', async () => {
+  it('saves over the version read, and returns 200 and the new ETag', async () => {
     const res = await put('a.xml', 'new', { 'If-Match': etagOf(XML) });
     expect(res.status).toBe(200);
     expect(res.etag).toBe(etagOf('new'));
@@ -92,7 +93,7 @@ describe('the API', () => {
 
   it('creates a file only if it does not exist, with If-None-Match: *', async () => {
     expect((await put('a.xml', 'mine', { 'If-None-Match': '*' })).status).toBe(412);
-    expect((await put('sub/new.xml', XML, { 'If-None-Match': '*' })).status).toBe(200);
+    expect((await put('sub/new.xml', XML, { 'If-None-Match': '*' })).status).toBe(201);
     expect(await onDisk('sub/new.xml')).toBe(XML);
     await rm(join(root, 'sub'), { recursive: true });
   });
@@ -103,7 +104,7 @@ describe('the API', () => {
   });
 
   it('deletes a file only if it is the version read', async () => {
-    const path = '/api/file?path=a.xml';
+    const path = '/api/files/a.xml';
     expect((await call('DELETE', path, { headers: { 'If-Match': etagOf('other') } })).status).toBe(412);
     expect((await call('DELETE', path, { headers: { 'If-Match': etagOf(XML) } })).status).toBe(200);
     await expect(onDisk('a.xml')).rejects.toThrow();
@@ -117,7 +118,9 @@ describe('the API', () => {
   });
 
   it('refuses paths outside the folder and bodies too large', async () => {
-    expect((await put('../x.xml', XML)).status).toBe(400);
+    // fetch would resolve an unencoded ../ itself.
+    expect((await put('..%2Fx.xml', XML)).status).toBe(400);
+    expect((await put('%E0.xml', XML)).status).toBe(400);
     expect((await put('a.xml', 'x'.repeat(11 * 1024 * 1024))).status).toBe(413);
   });
 
@@ -135,7 +138,56 @@ describe('the API', () => {
     await call('PUT', '/api/root', { body: JSON.stringify({ path: root }) });
   });
 
-  it('answers 404 to unknown routes', async () => {
+  it('accepts the slashes of a path encoded, as Swagger UI sends them', async () => {
+    expect((await put('sub%2Fencoded.xml', XML)).status).toBe(201);
+    expect(await onDisk('sub/encoded.xml')).toBe(XML);
+    await rm(join(root, 'sub'), { recursive: true });
+  });
+
+  it('answers 404 to unknown routes, and 405 to other methods on a file', async () => {
     expect((await call('GET', '/api/nope')).status).toBe(404);
+    const res = await fetch(url + '/api/files/a.xml', { method: 'POST' });
+    expect(res.status).toBe(405);
+    expect(res.headers.get('allow')).toBe('PUT, DELETE');
+  });
+});
+
+describe('the API documentation', () => {
+  let root: string;
+  let server: Server;
+  let url: string;
+
+  beforeAll(async () => {
+    root = await mkdtemp(join(tmpdir(), 'api-docs-test-'));
+    const api = createApi(root);
+    server = createServer((req, res) => void api(req, res));
+    await new Promise<void>((done) => server.listen(0, '127.0.0.1', done));
+    url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  });
+
+  afterAll(async () => {
+    server.close();
+    await rm(root, { recursive: true, force: true });
+  });
+
+  it('describes only routes that the API has', async () => {
+    const spec = await (await fetch(url + '/api/openapi.json')).json() as typeof OPENAPI;
+    expect(spec).toEqual({ ...OPENAPI, servers: [{ url }] });
+    for (const [path, methods] of Object.entries(spec.paths)) {
+      for (const method of Object.keys(methods)) {
+        const res = await fetch(url + path.replace('{path}', 'a.xml'), { method: method.toUpperCase() });
+        expect(res.status).not.toBe(404);
+        expect(res.status).not.toBe(405);
+      }
+    }
+  });
+
+  it('serves Swagger UI', async () => {
+    const page = await fetch(url + '/api/docs');
+    expect(page.headers.get('content-type')).toMatch(/^text\/html/);
+    for (const [file] of (await page.text()).matchAll(/\/api\/docs\/[\w.-]+/g)) {
+      expect((await fetch(url + file)).status).toBe(200);
+    }
+    expect((await fetch(url + '/api/docs/constructor')).status).toBe(404);
   });
 });
