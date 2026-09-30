@@ -3,7 +3,7 @@
 // closes the dialog and shows the execution in place of the tree editor.
 
 import { useState } from 'react';
-import { payloadKeys, payloadText } from '../../shared/payload';
+import { payloadHints, payloadKeys, payloadText, type PayloadHint } from '../../shared/payload';
 import type { Workspace } from '../../shared/workspace';
 import { saveAll, startRun } from '../actions';
 import { openDialog } from '../dialogs';
@@ -11,7 +11,9 @@ import { defaultRosbridgeUrl } from '../ros';
 import { useSettings } from '../settings';
 import { Icon } from './icons';
 
-function RunForm({ treeId, keys, close }: { treeId: string; keys: string[]; close: () => void }) {
+function RunForm({ treeId, keys, hints, close }: {
+  treeId: string; keys: string[]; hints: Map<string, PayloadHint>; close: () => void;
+}) {
   const settings = useSettings();
   const [values, setValues] = useState<Record<string, string>>(() =>
     Object.fromEntries(keys.map((k) => [k, settings.payloads[treeId]?.[k] ?? ''])));
@@ -39,14 +41,18 @@ function RunForm({ treeId, keys, close }: { treeId: string; keys: string[]; clos
       <h2><Icon name="play" size={15} /> Run {treeId}</h2>
 
       <fieldset className="bare run-payload" disabled={saving}>
-        {keys.length ? keys.map((key, i) => (
-          <label key={key} className="field">
-            <span className="field-label"><span className="port-name">@{key}</span></span>
-            <input className="mono" autoFocus={i === 0} value={values[key]} spellCheck={false}
-              placeholder="YAML, e.g. 3.0 or [a, b]"
-              onChange={(e) => setValues({ ...values, [key]: e.target.value })} />
-          </label>
-        )) : <p className="muted">This tree reads no payload.</p>}
+        {keys.length ? keys.map((key, i) => {
+          const hint = hints.get(key);
+          return (
+            <label key={key} className="field">
+              <span className="field-label"><span className="port-name">@{key}</span></span>
+              <input className="mono" autoFocus={i === 0} value={values[key]} spellCheck={false}
+                placeholder={hint?.example ? `YAML, e.g. ${hint.example}` : 'YAML'}
+                onChange={(e) => setValues({ ...values, [key]: e.target.value })} />
+              {hint?.description && <small>{hint.description}</small>}
+            </label>
+          );
+        }) : <p className="muted">This tree reads no payload.</p>}
       </fieldset>
 
       <details className="run-connection">
@@ -80,5 +86,6 @@ function RunForm({ treeId, keys, close }: { treeId: string; keys: string[]; clos
 
 export function openRunDialog(ws: Workspace, treeId: string) {
   const keys = payloadKeys(ws, treeId);
-  openDialog((close) => <RunForm treeId={treeId} keys={keys} close={close} />);
+  const hints = payloadHints(ws, treeId);
+  openDialog((close) => <RunForm treeId={treeId} keys={keys} hints={hints} close={close} />);
 }

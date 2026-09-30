@@ -123,7 +123,7 @@ The **Run** button sends the open tree to a [BehaviorTree.ROS2](https://github.c
 ros2 launch rosbridge_server rosbridge_websocket_launch.xml
 ```
 
-The dialog lists the payload the tree reads, i.e. every `{@key}` of the global blackboard, with YAML values such as `3.0` or `[joint1, joint2]`. By default the editor connects to `ws://<host>:9090` and calls the action `/commander/execute_objective`; both can be changed under *Connection*.
+The dialog lists the payload the tree reads, i.e. every `{@key}` of the global blackboard, with YAML values such as `3.0` or `[joint1, joint2]`. A tree describes its payload in a `<TreeNodesModel>`, as the ports of its own `<SubTree>` model, one per entry: the description goes under the field, and the example that ends it, after `e.g.`, goes in the field, e.g. `joint1 or [joint1, joint2]` for a port described as `the joints to move, e.g. joint1 or [joint1, joint2]`. The editor warns when a tree with such a model reads an entry it does not declare, and notes a tree that reads a payload without one. By default the editor connects to `ws://<host>:9090` and calls the action `/commander/execute_objective`; both can be changed under *Connection*.
 
 Unsaved changes are saved first, and StepIt Commander reads the tree files again before each goal whenever one changed, so the tree runs as just saved, new files included.
 

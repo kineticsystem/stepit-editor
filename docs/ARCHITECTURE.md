@@ -171,7 +171,7 @@ The checks are pure functions of the workspace: they return a list of `Issue`s a
 
 [`src/shared/ids.ts`](../src/shared/ids.ts) checks the IDs of new trees and node types, and the paths of new files.
 
-[`src/shared/payload.ts`](../src/shared/payload.ts) finds the entries of the global blackboard that a tree reads, i.e. every `{@key}` and `@key` in its ports and scripts and those of its SubTrees, which the Run dialog asks a value for.
+[`src/shared/payload.ts`](../src/shared/payload.ts) finds the entries of the global blackboard that a tree reads, i.e. every `{@key}` and `@key` in its ports and scripts and those of its SubTrees, which the Run dialog asks a value for. `payloadHints` describes each of them by the tree's own declaration, the ports of its `<SubTree>` model, one per entry, named after it: the description of the port goes under the field, and its example, the text after `e.g.` at the end of the description, in the field. The behaviors the tree uses have no say, so that building a behavior never changes what a Run dialog shows, and the editor knows nothing of them. The `payloadDeclared` rule warns when a tree with such a model reads an entry it does not declare, and adds an info note when a tree reads a payload without one: only a note, since a tree that reads the global blackboard is not necessarily one that is run on its own.
 
 ## The Server
 

@@ -91,6 +91,18 @@ describe('validateFiles', () => {
     )).toEqual(['warning: The tree "U" does not declare the port "b" in its TreeNodesModel']);
   });
 
+  it('reports a payload entry that a tree with a model does not declare', () => {
+    const declares = (ports: string) => `<TreeNodesModel><SubTree ID="T">${ports}</SubTree></TreeNodesModel>`;
+    const body = '<MoveTo goal="{@goal}" speed="{@speed}"/>';
+    expect(checkTree(body, declares('<input_port name="goal"/><input_port name="speed"/>'))).toEqual([]);
+    expect(checkTree(body, declares('<input_port name="goal"/>')))
+      .toEqual(['warning: The tree "T" reads @speed, which its TreeNodesModel does not declare']);
+    expect(checkTree(body)).toEqual([
+      'info: The tree "T" reads @goal, @speed but does not describe them: declare them as the ports of <SubTree ID="T"> in a TreeNodesModel',
+    ]);
+    expect(checkTree('<MoveTo goal="{goal}"/>')).toEqual([]);
+  });
+
   it('finds indirect recursion across files', () => {
     const issues = check({
       'a.xml': '<root BTCPP_format="4"><BehaviorTree ID="A"><SubTree ID="B"/></BehaviorTree></root>',
