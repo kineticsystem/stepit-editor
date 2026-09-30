@@ -360,7 +360,7 @@ The screen is laid out in [`App.tsx`](../src/client/App.tsx), which also handles
 
 | Component | Panel | Responsibility |
 |---|---|---|
-| [`Browser`](../src/client/components/Browser.tsx) | Left | Two tabs: **Trees**, the objectives and the subtrees, a tree alone in its file listed without the file; **Nodes**, the custom node types and the built-in nodes. Create and delete files; open another folder. The tab shown is a setting, `browserTab`. |
+| [`Browser`](../src/client/components/Browser.tsx) | Left | Two tabs: **Trees**, the objectives and the subtrees, each tree by its ID and never its file, except an empty or unreadable file; **Nodes**, the custom node types and the built-in nodes. Create and delete files; open another folder. The tab shown is a setting, `browserTab`. |
 | [`TreeEditor`](../src/client/components/TreeEditor.tsx) | Center | The header, the toolbar, the tree or XML view, and the problems list. |
 | [`TreeView`](../src/client/components/TreeView.tsx) | Center | The tree as an indented list: selection, keyboard navigation, drag and drop, SubTrees expanded read-only. |
 | [`XmlView`](../src/client/components/XmlView.tsx) | Center | The XML that will be written, read-only. |
