@@ -40,14 +40,14 @@ type GroupId = 'objectives' | 'subtrees' | 'behaviors' | 'builtins';
 type TreeSectionId = 'objectives' | 'subtrees';
 
 /**
- * What a list of trees shows: a tree alone when its file holds only that tree,
- * so that the list is not cluttered with a file name per tree, and the file
- * otherwise, with the trees it holds of that list. A file with several trees
- * may so appear in both lists, and one with no tree, e.g. unreadable, only
- * among the objectives.
+ * What a list of trees shows: every tree by its ID, wherever it lives, so that
+ * the list is not cluttered with file names; its file shows on hover. A file
+ * with no tree, e.g. empty or unreadable, is listed by its name among the
+ * objectives, to be seen and fixed. `alone` tells a tree that is the only one
+ * of its file, which can then be deleted with it.
  */
 type Entry =
-  | { kind: 'tree'; path: string; tree: BehaviorTreeDef }
+  | { kind: 'tree'; path: string; tree: BehaviorTreeDef; alone: boolean }
   | { kind: 'file'; path: string; trees: BehaviorTreeDef[] };
 
 function entriesOf(files: Record<string, FileState>, section: TreeSectionId): Entry[] {
@@ -56,8 +56,8 @@ function entriesOf(files: Record<string, FileState>, section: TreeSectionId): En
     if (!isObjectiveFile(f)) continue;
     const all = f.doc ? trees(f.doc) : [];
     const mine = all.filter((t) => isObjective(f.doc, t.id) === (section === 'objectives'));
-    if (all.length === 1 && mine.length === 1) entries.push({ kind: 'tree', path, tree: mine[0] });
-    else if (mine.length || (!all.length && section === 'objectives')) entries.push({ kind: 'file', path, trees: mine });
+    for (const tree of mine) entries.push({ kind: 'tree', path, tree, alone: all.length === 1 });
+    if (!all.length && section === 'objectives') entries.push({ kind: 'file', path, trees: [] });
   }
   const label = (e: Entry) => (e.kind === 'tree' ? e.tree.id : e.path);
   return entries.sort((a, b) => label(a).localeCompare(label(b)));
@@ -150,15 +150,19 @@ export function Browser({ analysis }: { analysis: Analysis }) {
   const subtrees = entriesOf(files, 'subtrees');
   const count = (entries: Entry[]) => entries.reduce((n, e) => n + (e.kind === 'tree' ? 1 : e.trees.length), 0);
 
-  /** The delete button of a file, and the markers of its state: unsaved, unreadable, problems. */
-  const fileState = (path: string) => {
+  /**
+   * The markers of a file's state, unsaved, unreadable, problems, and a button
+   * to delete it: only where that deletes nothing else than the row, i.e. not
+   * on a tree that shares its file with others.
+   */
+  const fileState = (path: string, deletable = true) => {
     const f = files[path];
     return (
       <>
         {isDirty(f) && <span className="dirty" title="Unsaved changes">●</span>}
         {f.error && <span className="count count-error" title={f.error.message}>XML</span>}
         <Counts {...countBySeverity(byFile.get(path))} />
-        <button className="icon-button row-action" title={`Delete ${path}`}
+        {deletable && <button className="icon-button row-action" title={`Delete ${path}`}
           onClick={async (e) => {
             e.stopPropagation();
             if (await confirm('Delete file', <>Delete <b>{path}</b> from disk? This cannot be undone.</>)) {
@@ -166,7 +170,7 @@ export function Browser({ analysis }: { analysis: Analysis }) {
             }
           }}>
           <Icon name="trash" size={14} />
-        </button>
+        </button>}
       </>
     );
   };
@@ -182,22 +186,22 @@ export function Browser({ analysis }: { analysis: Analysis }) {
   const treeList = (section: TreeSectionId, entries: Entry[], filter: string) => {
     const query = filter.trim().toLowerCase();
     const matches = (path: string, tree: BehaviorTreeDef) => tree.id.toLowerCase().includes(query) || path.toLowerCase().includes(query);
-    const treeRow = (path: string, tree: BehaviorTreeDef, flat: boolean) => (
+    const treeRow = (path: string, tree: BehaviorTreeDef, alone: boolean) => (
       <li key={tree.uid} role="treeitem"
-        className={`tree-row ${flat ? 'flat' : ''} ${selection.tree === tree.uid && !focusModel ? 'active' : ''}`}
-        title={flat ? path : undefined}
+        className={`tree-row flat ${selection.tree === tree.uid && !focusModel ? 'active' : ''}`}
+        title={alone ? path : `${path}, with other trees`}
         onClick={() => useStore.getState().select({ file: path, tree: tree.uid })}>
         <Icon name={section === 'objectives' ? 'tree' : 'subtree'} size={14} className="muted" />
         <span className="file-name">{tree.id || <i className="muted">no ID</i>}</span>
         {section === 'subtrees' && subtreeUses(tree)}
-        {flat && fileState(path)}
+        {fileState(path, alone)}
       </li>
     );
     return (
       <ul role="tree" aria-label={section === 'objectives' ? 'Objectives' : 'Subtrees'}>
         {entries.map((entry) => {
           const { path } = entry;
-          if (entry.kind === 'tree') return query && !matches(path, entry.tree) ? null : treeRow(path, entry.tree, true);
+          if (entry.kind === 'tree') return query && !matches(path, entry.tree) ? null : treeRow(path, entry.tree, entry.alone);
           const shown = query ? entry.trees.filter((t) => matches(path, t)) : entry.trees;
           if (query && !path.toLowerCase().includes(query) && !shown.length) return null;
           const key = `${section}:${path}`;

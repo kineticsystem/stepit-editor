@@ -111,7 +111,7 @@ We can open another folder from the editor too, by clicking the folder path at t
 ## Using the Editor
 
 - **Workspace** (left), in two tabs, each one list with one filter:
-  - **Trees**: **Objectives** are the trees that run on their own, the main tree of each file, its `main_tree_to_execute`; **Subtrees** are every other tree, which only runs when another tree includes it with a SubTree node, with how often each is included. A tree alone in its file is listed by its ID only, its file shown on hover; a file with several trees is listed with its trees. Make a tree an objective or a subtree with **Kind** in its details, in any file of the folder. Opening another tree, e.g. from a SubTree, shows this tab.
+  - **Trees**: **Objectives** are the trees that run on their own, the main tree of each file, its `main_tree_to_execute`; **Subtrees** are every other tree, which only runs when another tree includes it with a SubTree node, with how often each is included. Every tree is listed by its ID, its file shown on hover, even when a file holds several trees; only an empty or unreadable file is listed by its name, to be fixed. Make a tree an objective or a subtree with **Kind** in its details, in any file of the folder. Opening another tree, e.g. from a SubTree, shows this tab.
   - **Nodes**: **Behaviors** are our node types, declared in a `<TreeNodesModel>`, with how often each is used; click one to see its ports and where it is used, or drag it onto the tree. **Built-in nodes** are BehaviorTree.CPP's own nodes (Sequence, Fallback, RetryUntilSuccessful…), which work the same way.
 
   The tab last shown is remembered.
