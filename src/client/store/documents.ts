@@ -214,8 +214,8 @@ export const documentsSlice: Slice<DocumentsSlice> = (set, get) => {
       }
     },
 
-    createFile(path, treeId) {
-      const doc = newDocument(treeId);
+    createFile(path, treeId, objective = true) {
+      const doc = newDocument(treeId, objective);
       setFile({ path, doc, raw: '', baseline: '', past: [], future: [], isNew: true });
       get().select({ file: path, tree: defaultTree(doc) });
     },

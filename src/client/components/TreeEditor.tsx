@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { idError } from '../../shared/ids';
 import { findTreeByUid, flatten, isDisabled, locate } from '../../shared/treeOps';
 import type { NodeModel } from '../../shared/types';
+import { isObjective } from '../../shared/workspace';
 import { models as docModels, trees } from '../../shared/xml';
 import {
   addNewTree, copySelected, cutSelected, deleteSelected, duplicateSelected, paste, redo, save, shiftSelected,
@@ -143,8 +144,11 @@ export function TreeEditor({ analysis }: { analysis: Analysis }) {
               </button>
             )}
             {tree?.id && (
-              <button className="run-button" title={running ? 'A tree is already running' : `Run ${tree.id} on the robot, through rosbridge`}
-                onClick={() => openRunDialog(ws, tree.id)} disabled={running}>
+              <button className="run-button"
+                title={!isObjective(file.doc, tree.id)
+                  ? `${tree.id} is a subtree: it runs only inside another tree. Make it an objective to run it on its own`
+                  : running ? 'A tree is already running' : `Run ${tree.id} on the robot, through rosbridge`}
+                onClick={() => openRunDialog(ws, tree.id)} disabled={running || !isObjective(file.doc, tree.id)}>
                 <Icon name="play" size={14} /> Run
               </button>
             )}

@@ -83,6 +83,13 @@ describe('serializeDocument', () => {
     expect(tree.id).toBe('Fresh');
     expect(tree.children.map((n) => n.id)).toEqual(['Sequence']);
   });
+
+  it('writes a new subtree without a main tree', () => {
+    const out = serializeDocument(newDocument('Helper', false));
+    expect(out).toContain('<root BTCPP_format="4">');
+    expect(out).not.toContain('main_tree_to_execute');
+    expect(trees(parseDocument(out).doc!)[0].id).toBe('Helper');
+  });
 });
 
 describe('isBehaviorFile', () => {

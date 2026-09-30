@@ -26,6 +26,7 @@ const paths: Record<string, string> = {
   collapse: 'M4 10l4-4 4 4M4 13.5h8',
   code: 'M5.5 4.5L2 8l3.5 3.5M10.5 4.5L14 8l-3.5 3.5',
   tree: 'M3 3h4v3H3zM9 10h4v3H9zM5 6v5.5h4',
+  nodes: 'M2.5 2.5h4v4h-4zM9.5 2.5h4v4h-4zM2.5 9.5h4v4h-4zM9.5 9.5h4v4h-4z',
   check: 'M3 8.5l3 3 7-7',
   open: 'M9 3h4v4M13 3L7.5 8.5M11 9.5V13H3V5h3.5',
   search: 'M7 12A5 5 0 107 2a5 5 0 000 10zM10.5 10.5L14 14',
@@ -53,7 +54,7 @@ const LETTERS: Record<NodeCategory, string> = {
 export function CategoryBadge({ category, plain = false }: { category?: NodeCategory; plain?: boolean }) {
   return (
     <span className={`badge cat-${category ?? 'Unknown'}`} title={plain ? undefined : category ?? 'Unknown node type'}>
-      {category ? LETTERS[category] : '!'}
+      {category === 'SubTree' ? <Icon name="subtree" size={12} /> : category ? LETTERS[category] : '!'}
     </span>
   );
 }

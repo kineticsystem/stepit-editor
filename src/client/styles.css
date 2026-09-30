@@ -233,6 +233,8 @@ button.root-path:hover > svg:last-child { opacity: 1; }
   height: 28px; padding: 0 8px 0 6px; cursor: pointer;
 }
 .tree-row { padding-left: 42px; }
+/* A tree alone in its file is listed without its file: level with the behaviors. */
+.tree-row.flat { padding-left: 14px; }
 .file-row:hover, .tree-row:hover { background: var(--hover); }
 .file-row.active { font-weight: 600; }
 .tree-row.active { background: var(--selected); }
@@ -240,7 +242,7 @@ button.root-path:hover > svg:last-child { opacity: 1; }
 .dirty { color: var(--accent); font-size: 10px; }
 .file-list .empty { padding: 16px; color: var(--muted); display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
 .row-action { opacity: 0; }
-.file-row:hover .row-action, .row:hover .row-action { opacity: 1; }
+.file-row:hover .row-action, .tree-row.flat:hover .row-action, .row:hover .row-action { opacity: 1; }
 
 .chevron {
   padding: 2px; border: 0; background: none; color: var(--muted); border-radius: 4px;
@@ -267,7 +269,9 @@ button.root-path:hover > svg:last-child { opacity: 1; }
 .cat-Decorator { background: var(--c-decorator); }
 .cat-Action { background: var(--c-action); }
 .cat-Condition { background: var(--c-condition); }
-.cat-SubTree { background: var(--c-subtree); }
+/* A SubTree is a tree, not a behavior: an outline around the subtree icon, not a filled letter. */
+.cat-SubTree { background: transparent; color: var(--c-subtree); box-shadow: inset 0 0 0 1.5px var(--c-subtree); }
+.badge svg { width: 70%; height: 70%; }
 .cat-Unknown { background: var(--c-unknown); }
 .cat-Tree { background: var(--c-tree); }
 
@@ -548,3 +552,6 @@ fieldset.bare:disabled input, fieldset.bare:disabled textarea, fieldset.bare:dis
 }
 
 .browser > .root-path { flex: none; padding-bottom: 8px; }
+/* The two tabs of the workspace: the trees, and the node types. */
+.browser-tabs { display: flex; flex: none; margin: 0 10px 8px; }
+.browser-tabs button { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }

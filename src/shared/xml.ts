@@ -293,10 +293,13 @@ export function newTree(treeId: string): BehaviorTreeDef {
   return { uid: newUid(), id: treeId, attrs: {}, children: [root] };
 }
 
-/** A new file with one tree, which is its main tree. */
-export function newDocument(treeId: string): BTDocument {
+/**
+ * A new file with one tree: an objective, its main tree, or a subtree, which
+ * only runs when another tree includes it.
+ */
+export function newDocument(treeId: string, objective = true): BTDocument {
   return {
-    rootAttrs: { BTCPP_format: '4', main_tree_to_execute: treeId },
+    rootAttrs: objective ? { BTCPP_format: '4', main_tree_to_execute: treeId } : { BTCPP_format: '4' },
     items: [{ kind: 'tree', tree: newTree(treeId) }],
   };
 }

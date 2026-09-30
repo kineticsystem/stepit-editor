@@ -5,7 +5,7 @@
 
 import { BUILTIN_MODELS } from './builtins';
 import { flatten } from './treeOps';
-import { type BehaviorTreeDef, type BTNode, isNodeTypeCategory, type NodeCategory, type NodeModel, type ParsedFile } from './types';
+import { type BehaviorTreeDef, type BTDocument, type BTNode, isNodeTypeCategory, type NodeCategory, type NodeModel, type ParsedFile } from './types';
 import { models as docModels, trees as docTrees } from './xml';
 
 export interface TreeRef {
@@ -107,6 +107,24 @@ export function customModels(ws: Workspace): NodeModel[] {
 }
 
 /** How many nodes of type `id` the workspace has, in all trees. */
+/**
+ * Whether a tree is an objective, one that runs on its own: the main tree of
+ * its file (main_tree_to_execute). Any other tree is a subtree, which only runs
+ * when another tree includes it with a SubTree node.
+ */
+export function isObjective(doc: BTDocument | undefined, treeId: string): boolean {
+  return !!treeId && doc?.rootAttrs.main_tree_to_execute === treeId;
+}
+
+/** How many SubTree nodes include the tree, across the workspace. */
+export function subtreeCount(ws: Workspace, treeId: string): number {
+  let count = 0;
+  for (const refs of ws.trees.values()) {
+    for (const ref of refs) count += subtreeRefs(ref.tree.children).filter((n) => n.attrs.ID === treeId).length;
+  }
+  return count;
+}
+
 export function usageCount(ws: Workspace, id: string): number {
   return usagesOf(ws, id).reduce((n, u) => n + u.nodes.length, 0);
 }

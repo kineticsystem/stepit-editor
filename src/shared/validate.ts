@@ -11,7 +11,7 @@
 import { childrenRange, COMMON_ATTRIBUTES } from './builtins';
 import type { BehaviorTreeDef, BTDocument, BTNode, Issue, NodeModel, ParsedFile, PortModel, Severity } from './types';
 import { payloadKeys } from './payload';
-import { buildWorkspace, categoryOf, modelOf, subtreeRefs, type Workspace } from './workspace';
+import { buildWorkspace, categoryOf, isObjective, modelOf, subtreeCount, subtreeRefs, type Workspace } from './workspace';
 import { models as docModels, trees as docTrees } from './xml';
 
 const NODE_STATUS = ['SUCCESS', 'FAILURE', 'RUNNING', 'IDLE', 'SKIPPED'];
@@ -175,6 +175,20 @@ const payloadDeclared: Rule = {
   },
 };
 
+/**
+ * A subtree, a tree that is not the main tree of its file, runs only when
+ * another tree includes it: one that no tree includes never runs.
+ */
+const unusedSubtrees: Rule = {
+  file({ ws, add }, path, doc) {
+    for (const tree of docTrees(doc)) {
+      if (!tree.id || isObjective(doc, tree.id) || subtreeCount(ws, tree.id) > 0) continue;
+      add('warning', path, `The subtree "${tree.id}" never runs: no tree includes it, and it is not the main tree of its file`,
+        { tree: tree.id, line: tree.line });
+    }
+  },
+};
+
 const duplicateTrees: Rule = {
   workspace({ ws, add }) {
     for (const [id, refs] of ws.trees) {
@@ -329,7 +343,7 @@ const emptyScripts: Rule = {
 /** Every check, in the order their issues are reported for the same element. */
 export const RULES: Rule[] = [
   rootAttributes, modelDeclarations, treeRoots, nodeTypes, childCount, ports, subtrees, emptyScripts,
-  payloadDeclared, duplicateTrees, modelConflicts, recursion,
+  payloadDeclared, unusedSubtrees, duplicateTrees, modelConflicts, recursion,
 ];
 
 export function validateWorkspace(ws: Workspace, rules: Rule[] = RULES): Issue[] {
