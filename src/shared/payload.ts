@@ -52,3 +52,33 @@ export function payloadText(values: Record<string, string>): string {
     .map(([key, value]) => `${key}: ${value.trim()}`)
     .join('\n');
 }
+
+/**
+ * What a tree says about an entry of its payload: its description, and an
+ * example of its value.
+ */
+export interface PayloadHint {
+  description?: string;
+  example?: string;
+}
+
+/** `e.g. <example>` at the end of a description. */
+const EXAMPLE = /^(.*?)[,;:]?\s*\be\.g\.\s+(.+)$/s;
+
+/**
+ * The hint of each payload entry of a tree, from the tree's own declaration:
+ * the ports of its <SubTree> model in a TreeNodesModel, one per entry, named
+ * after it. A port's description ends with an example of its value, after
+ * "e.g.", e.g. "the joints to move, e.g. joint1 or [joint1, joint2]". The
+ * behaviors the tree uses have no say: the tree describes its own payload.
+ */
+export function payloadHints(ws: Workspace, treeId: string): Map<string, PayloadHint> {
+  const hints = new Map<string, PayloadHint>();
+  for (const port of ws.subtreeModels.get(treeId)?.ports ?? []) {
+    const text = port.description?.trim();
+    if (!text) continue;
+    const match = EXAMPLE.exec(text);
+    hints.set(port.name, match ? { description: match[1].trim() || undefined, example: match[2].trim() } : { description: text });
+  }
+  return hints;
+}

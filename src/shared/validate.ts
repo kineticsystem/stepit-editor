@@ -10,6 +10,7 @@
 
 import { childrenRange, COMMON_ATTRIBUTES } from './builtins';
 import type { BehaviorTreeDef, BTDocument, BTNode, Issue, NodeModel, ParsedFile, PortModel, Severity } from './types';
+import { payloadKeys } from './payload';
 import { buildWorkspace, categoryOf, modelOf, subtreeRefs, type Workspace } from './workspace';
 import { models as docModels, trees as docTrees } from './xml';
 
@@ -142,6 +143,34 @@ const treeRoots: Rule = {
       add('error', file, `The tree "${tree.id}" is empty: it needs exactly one root node`, where);
     } else if (tree.children.length > 1) {
       add('error', file, `The tree "${tree.id}" has ${tree.children.length} root nodes: it needs exactly one`, where);
+    }
+  },
+};
+
+/**
+ * A tree describes the entries of the global blackboard it reads, `{@key}`,
+ * as the ports of its <SubTree> model, so that the Run dialog can say what
+ * each one is. With a model, an entry it does not declare is a warning.
+ * Without one, a tree that reads a payload gets a note: it runs the same, but
+ * its payload comes with no description. It is only a note because a tree
+ * that reads the global blackboard need not be one that is run on its own.
+ */
+const payloadDeclared: Rule = {
+  tree({ ws, add }, file, tree) {
+    const keys = payloadKeys(ws, tree.id);
+    const where = { tree: tree.id, line: tree.line };
+    const model = ws.subtreeModels.get(tree.id);
+    if (!model) {
+      if (keys.length) {
+        const entries = keys.map((k) => `@${k}`).join(', ');
+        add('info', file, `The tree "${tree.id}" reads ${entries} but does not describe them: declare them as the ports of <SubTree ID="${tree.id}"> in a TreeNodesModel`, where);
+      }
+      return;
+    }
+    const declared = new Set(model.ports.map((p) => p.name));
+    for (const key of keys) {
+      if (declared.has(key)) continue;
+      add('warning', file, `The tree "${tree.id}" reads @${key}, which its TreeNodesModel does not declare`, where);
     }
   },
 };
@@ -300,7 +329,7 @@ const emptyScripts: Rule = {
 /** Every check, in the order their issues are reported for the same element. */
 export const RULES: Rule[] = [
   rootAttributes, modelDeclarations, treeRoots, nodeTypes, childCount, ports, subtrees, emptyScripts,
-  duplicateTrees, modelConflicts, recursion,
+  payloadDeclared, duplicateTrees, modelConflicts, recursion,
 ];
 
 export function validateWorkspace(ws: Workspace, rules: Rule[] = RULES): Issue[] {
