@@ -11,7 +11,7 @@ import { type DragEvent, type KeyboardEvent, useEffect, useMemo, useRef, useStat
 import { canHaveChildren } from '../../shared/builtins';
 import { isDisabled, locate, type Placement } from '../../shared/treeOps';
 import type { BehaviorTreeDef, BTNode, Issue } from '../../shared/types';
-import { categoryOf, findTree, modelOf, type TreeRef, type Workspace } from '../../shared/workspace';
+import { categoryOf, findTree, isObjective, modelOf, type TreeRef, type Workspace } from '../../shared/workspace';
 import {
   addNode, copySelected, cutSelected, deleteSelected, duplicateSelected, moveNode, paste, shiftSelected,
   toggleDisabledSelected,
@@ -90,6 +90,7 @@ export function TreeView({ analysis, path, tree }: { analysis: Analysis; path: s
   const { ws, byNode } = analysis;
   const collapsed = useStore((s) => s.collapsed);
   const openSubtrees = useStore((s) => s.openSubtrees);
+  const objective = useStore((s) => isObjective(s.files[path]?.doc, tree.id));
   const selection = useStore((s) => s.selection);
   const peek = useStore((s) => s.peek);
   const focusModel = useStore((s) => s.focusModel);
@@ -254,9 +255,9 @@ export function TreeView({ analysis, path, tree }: { analysis: Analysis; path: s
             </button>
             {row.kind === 'tree' ? (
               <>
-                <Icon name="tree" size={14} className="muted" />
+                <Icon name={objective ? 'tree' : 'subtree'} size={14} className="muted" />
                 <span className="node-id">{tree.id || 'BehaviorTree'}</span>
-                <span className="muted small">BehaviorTree</span>
+                <span className="muted small">{objective ? 'Objective' : 'Subtree'}</span>
               </>
             ) : node!.id === 'SubTree' ? (
               <>

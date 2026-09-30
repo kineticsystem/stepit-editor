@@ -114,7 +114,8 @@ export interface DocumentsSlice {
   save(path: string, over?: string | null): Promise<SaveResult>;
   /** Replaces a file with its content on disk, dropping its edits. */
   revert(path: string): Promise<void>;
-  createFile(path: string, treeId: string): void;
+  /** Creates a file with one tree: an objective, its main tree, unless `objective` is false. */
+  createFile(path: string, treeId: string, objective?: boolean): void;
   deleteFile(path: string): Promise<void>;
   runNative(): Promise<void>;
 }

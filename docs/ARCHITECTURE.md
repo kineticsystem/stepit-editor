@@ -153,6 +153,8 @@ The writer has one job: a file that the editor did not change must come back byt
 
 BehaviorTree.CPP applications usually register every file of a folder in one factory, so a tree may include a tree of another file, and a node type declared anywhere can be used everywhere. [`src/shared/workspace.ts`](../src/shared/workspace.ts) builds this view: `buildWorkspace` takes all the parsed files and indexes the trees by ID, the custom node models by ID, the SubTree interfaces and the built-in nodes.
 
+A tree is an **objective** when it is the main tree of its file, its `main_tree_to_execute` (`isObjective`), and a **subtree** otherwise: it only runs when another tree includes it with a SubTree node, `subtreeCount` of them. The attribute is the only thing that decides, so a tree becomes one or the other in place, in any file of the folder. The list of the workspace, the Run button and the check `unusedSubtrees`, which reports a subtree that no tree includes, all read it the same way, and so does StepIt Commander, which refuses a goal for a subtree.
+
 The `Workspace` is read-only and cheap to build: the client builds a new one after every edit rather than updating it. Helper functions answer the questions the UI asks, e.g. `modelOf` (what is this node?), `referencesTo` (which trees include this one?) and `usagesOf` (where is this node type used?).
 
 The list of built-in nodes, with their ports and descriptions, lives in [`src/shared/builtins.ts`](../src/shared/builtins.ts). It is a fallback: when the native validator is built, the server asks BehaviorTree.CPP for the real list and sends that to the browser instead.
@@ -358,7 +360,7 @@ The screen is laid out in [`App.tsx`](../src/client/App.tsx), which also handles
 
 | Component | Panel | Responsibility |
 |---|---|---|
-| [`Browser`](../src/client/components/Browser.tsx) | Left | The files and their trees, the custom node types and the built-in nodes; create and delete files; open another folder. |
+| [`Browser`](../src/client/components/Browser.tsx) | Left | Two tabs: **Trees**, the objectives and the subtrees, a tree alone in its file listed without the file; **Nodes**, the custom node types and the built-in nodes. Create and delete files; open another folder. The tab shown is a setting, `browserTab`. |
 | [`TreeEditor`](../src/client/components/TreeEditor.tsx) | Center | The header, the toolbar, the tree or XML view, and the problems list. |
 | [`TreeView`](../src/client/components/TreeView.tsx) | Center | The tree as an indented list: selection, keyboard navigation, drag and drop, SubTrees expanded read-only. |
 | [`XmlView`](../src/client/components/XmlView.tsx) | Center | The XML that will be written, read-only. |

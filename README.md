@@ -110,14 +110,18 @@ We can open another folder from the editor too, by clicking the folder path at t
 
 ## Using the Editor
 
-- **Workspace** (left): **Objectives** lists the XML files of the folder and the trees in each. **Behaviors** lists our node types, declared in a `<TreeNodesModel>`, with how often each is used; click one to see its ports and where it is used, or drag it onto the tree. **Built-in nodes** lists BehaviorTree.CPP's own nodes (Sequence, Fallback, RetryUntilSuccessful…), which work the same way.
-- **Tree** (center): the selected tree as a collapsible list. Add nodes and SubTrees, drag them around, cut, copy, paste and undo. Open a SubTree to edit the tree it includes, and use the arrows at the top to go back. The **XML** tab shows the file as it will be saved.
+- **Workspace** (left), in two tabs, each one list with one filter:
+  - **Trees**: **Objectives** are the trees that run on their own, the main tree of each file, its `main_tree_to_execute`; **Subtrees** are every other tree, which only runs when another tree includes it with a SubTree node, with how often each is included. A tree alone in its file is listed by its ID only, its file shown on hover; a file with several trees is listed with its trees. Make a tree an objective or a subtree with **Kind** in its details, in any file of the folder. Opening another tree, e.g. from a SubTree, shows this tab.
+  - **Nodes**: **Behaviors** are our node types, declared in a `<TreeNodesModel>`, with how often each is used; click one to see its ports and where it is used, or drag it onto the tree. **Built-in nodes** are BehaviorTree.CPP's own nodes (Sequence, Fallback, RetryUntilSuccessful…), which work the same way.
+
+  The tab last shown is remembered.
+- **Tree** (center): the selected tree as a collapsible list. Add nodes and SubTrees, drag them around, cut, copy, paste and undo. A SubTree node has an outlined badge, a behavior a filled one. Open a SubTree to edit the tree it includes, and use the arrows at the top to go back. The **XML** tab shows the file as it will be saved.
 - **Disabling a node**: select it and press **D**, or click ⊘ in the toolbar or on its row, to keep it in the file without running it. The editor writes `_skipIf="true"`, so BehaviorTree.CPP skips the node, which returns SKIPPED, and greys it out together with everything below it. A node that already had a `_skipIf` condition keeps it, as `true || (condition)`, and gets it back when enabled again.
 - **Details** (right): the selected node's name, ports, scripts (`_skipIf`, `_onSuccess`…) and notes, or, with no node selected, the tree's ID, description and ports.
 
 ## Running a Tree on the Robot
 
-The **Run** button sends the open tree to a [BehaviorTree.ROS2](https://github.com/BehaviorTree/BehaviorTree.ROS2) server, which runs it on the robot. The editor talks to the server through [rosbridge](https://github.com/RobotWebTools/rosbridge_suite), so it needs no ROS itself. [StepIt Commander](https://github.com/kineticsystem/stepit-commander) starts rosbridge by default; with another server, start rosbridge next to it, e.g.:
+The **Run** button sends the open objective to a [BehaviorTree.ROS2](https://github.com/BehaviorTree/BehaviorTree.ROS2) server, which runs it on the robot. A subtree cannot be run on its own, so its Run button is disabled. The editor talks to the server through [rosbridge](https://github.com/RobotWebTools/rosbridge_suite), so it needs no ROS itself. [StepIt Commander](https://github.com/kineticsystem/stepit-commander) starts rosbridge by default; with another server, start rosbridge next to it, e.g.:
 
 ```
 ros2 launch rosbridge_server rosbridge_websocket_launch.xml
@@ -142,7 +146,7 @@ A file may change on disk while it is open, e.g. edited by hand, pulled from Git
 
 Two layers, both run on unsaved edits too:
 
-1. **The editor's checks** run on every change and mark the offending rows: XML syntax, unknown node types, the number of children per node (a Decorator has one, IfThenElse two or three, Switch3 four…), unknown ports, input ports without a value or default, literals of the wrong type (`num_cycles="many"`), output ports that are not `{blackboard}` references, SubTrees pointing to missing trees, recursive SubTrees, duplicate tree IDs, and a `main_tree_to_execute` that does not exist.
+1. **The editor's checks** run on every change and mark the offending rows: XML syntax, unknown node types, the number of children per node (a Decorator has one, IfThenElse two or three, Switch3 four…), unknown ports, input ports without a value or default, literals of the wrong type (`num_cycles="many"`), output ports that are not `{blackboard}` references, SubTrees pointing to missing trees, recursive SubTrees, duplicate tree IDs, a `main_tree_to_execute` that does not exist, and a subtree that no tree includes, which never runs.
 2. **BehaviorTree.CPP itself** (the *Check with BehaviorTree.CPP* button): the program in `validator/` registers each declared node type as a dummy with its declared ports, registers every file and instantiates every tree, then reports what the library refuses. This catches whatever the first layer misses, with the library's own messages. It needs the library, so it is built in the container only.
 
 The same checks run from the command line, e.g. in CI or a pre-commit hook; the exit code is 1 on any error. Inside the container:

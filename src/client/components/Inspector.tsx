@@ -9,7 +9,7 @@ import {
   type BehaviorTreeDef, type BTDocument, type BTNode, type Issue, type NodeModel, NODE_TYPE_CATEGORIES,
   type NodeTypeCategory, type PortDirection, type PortModel,
 } from '../../shared/types';
-import { categoryOf, modelOf, referencesTo, subtreeRefs, usagesOf } from '../../shared/workspace';
+import { categoryOf, isObjective, modelOf, referencesTo, subtreeRefs, usagesOf } from '../../shared/workspace';
 import { models as docModels, trees as docTrees, isGenerated } from '../../shared/xml';
 import {
   declareFromNode, declareInterface, deleteTree, editNode, editTree, removeInterface, renameTree, setMainTree,
@@ -398,7 +398,9 @@ function TreeInspector({ analysis, path, tree, doc }: { analysis: Analysis; path
   const { ws } = analysis;
   const [id, setId] = useState(tree.id);
   useEffect(() => setId(tree.id), [tree.id, tree.uid]);
-  const isMain = doc.rootAttrs.main_tree_to_execute === tree.id;
+  const isMain = isObjective(doc, tree.id);
+  /** The objective of the file, which becomes a subtree when this tree becomes the objective. */
+  const otherMain = !isMain ? doc.rootAttrs.main_tree_to_execute : undefined;
   const issues = analysis.issues.filter((i) => i.file === path && i.tree === tree.id);
   const nodes = flatten(tree.children);
   const uses = [...new Set(subtreeRefs(tree.children).map((n) => n.attrs.ID).filter(Boolean))];
@@ -420,10 +422,14 @@ function TreeInspector({ analysis, path, tree, doc }: { analysis: Analysis; path
   return (
     <div className="inspector-body">
       <div className="inspector-title">
-        <span className="badge cat-Tree"><Icon name="tree" size={12} /></span>
+        {isMain
+          ? <span className="badge cat-Tree"><Icon name="tree" size={12} /></span>
+          : <span className="badge cat-SubTree"><Icon name="subtree" size={12} /></span>}
         <div>
           <h2>{tree.id || 'BehaviorTree'}</h2>
-          <div className="muted small">Behavior tree · {path}{tree.line !== undefined && ` · line ${tree.line}`}</div>
+          <div className="muted small">
+            {isMain ? 'Objective' : 'Subtree'} · {path}{tree.line !== undefined && ` · line ${tree.line}`}
+          </div>
         </div>
       </div>
       <IssueList issues={issues} />
@@ -437,10 +443,20 @@ function TreeInspector({ analysis, path, tree, doc }: { analysis: Analysis; path
           {error ? <small className="field-error">{error}</small>
             : id !== tree.id ? <small>Press Enter to rename; SubTree references are updated too</small> : null}
         </form>
-        <label className="checkbox">
-          <input type="checkbox" checked={isMain} onChange={(e) => setMainTree(path, tree.id, e.target.checked)} />
-          <span>Main tree of {path} (<code>main_tree_to_execute</code>)</span>
-        </label>
+        <div className="field" role="radiogroup" aria-label="Kind">
+          <div className="field-label">Kind</div>
+          <label className="checkbox">
+            <input type="radio" name={`kind-${tree.uid}`} checked={isMain} onChange={() => setMainTree(path, tree.id, true)} />
+            <span>
+              <b>Objective</b>: runs on its own, as the main tree of {path} (<code>main_tree_to_execute</code>)
+              {otherMain && <>, instead of {otherMain}, which becomes a subtree</>}
+            </span>
+          </label>
+          <label className="checkbox">
+            <input type="radio" name={`kind-${tree.uid}`} checked={!isMain} onChange={() => setMainTree(path, tree.id, false)} />
+            <span><b>Subtree</b>: runs only inside another tree, which includes it with a SubTree node</span>
+          </label>
+        </div>
         <TextField label="Description" value={tree.attrs._description} multiline
           onChange={(v) => editTree(path, tree.uid, (t) => setAttr(t, '_description', v), `tree:${tree.uid}:description`)} />
       </Section>
@@ -504,7 +520,7 @@ export function Inspector({ analysis }: { analysis: Analysis }) {
   return (
     <aside className="panel inspector">
       <header className="panel-header">
-        <h1>{focusModel ? 'Behavior' : node || peekNode ? 'Node' : 'Objective'}</h1>
+        <h1>{focusModel ? 'Behavior' : node || peekNode ? 'Node' : tree && !isObjective(file?.doc, tree.id) ? 'Subtree' : 'Objective'}</h1>
       </header>
       {focusModel ? (
         <BehaviorInspector key={focusModel} analysis={analysis} id={focusModel} />

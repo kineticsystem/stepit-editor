@@ -112,7 +112,7 @@ describe('validateFiles', () => {
   });
 
   it('reports duplicate tree IDs across files', () => {
-    const tree = '<root BTCPP_format="4"><BehaviorTree ID="A"><AlwaysSuccess/></BehaviorTree></root>';
+    const tree = '<root BTCPP_format="4" main_tree_to_execute="A"><BehaviorTree ID="A"><AlwaysSuccess/></BehaviorTree></root>';
     const issues = check({ 'a.xml': tree, 'b.xml': tree });
     expect(issues.map((i) => `${i.file}: ${i.message}`)).toEqual([
       'a.xml: The tree ID "A" is defined 2 times (a.xml, b.xml)',
@@ -121,10 +121,23 @@ describe('validateFiles', () => {
   });
 
   it('checks the root attributes', () => {
-    expect(check({ 'a.xml': '<root BTCPP_format="3"><BehaviorTree ID="A"><AlwaysSuccess/></BehaviorTree></root>' })
+    expect(check({ 'a.xml': '<root BTCPP_format="3" main_tree_to_execute="A"><BehaviorTree ID="A"><AlwaysSuccess/></BehaviorTree></root>' })
       .map((i) => i.message)).toEqual(['BTCPP_format="3" is not supported: BehaviorTree.CPP 4 reads format 4 only']);
+    // A is not the main tree, which names a tree that does not exist, so A is a subtree nothing includes.
     expect(check({ 'a.xml': '<root BTCPP_format="4" main_tree_to_execute="X"><BehaviorTree ID="A"><AlwaysSuccess/></BehaviorTree></root>' })
-      .map((i) => i.message)).toEqual(['main_tree_to_execute refers to the unknown tree "X"']);
+      .map((i) => i.message)).toEqual([
+      'main_tree_to_execute refers to the unknown tree "X"',
+      'The subtree "A" never runs: no tree includes it, and it is not the main tree of its file',
+    ]);
+  });
+
+  it('reports a subtree that no tree includes, since it never runs', () => {
+    const objective = '<root BTCPP_format="4" main_tree_to_execute="Main"><BehaviorTree ID="Main"><SubTree ID="Used"/></BehaviorTree></root>';
+    const subtree = (id: string) => `<root BTCPP_format="4"><BehaviorTree ID="${id}"><AlwaysSuccess/></BehaviorTree></root>`;
+    expect(check({ 'main.xml': objective, 'used.xml': subtree('Used'), 'unused.xml': subtree('Unused') })
+      .map((i) => `${i.severity}: ${i.file}: ${i.message}`)).toEqual([
+      'warning: unused.xml: The subtree "Unused" never runs: no tree includes it, and it is not the main tree of its file',
+    ]);
   });
 
   it('reports models that redefine built-in nodes', () => {

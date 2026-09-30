@@ -13,9 +13,13 @@ export interface Settings {
   runAction: string;
   /** The payload last used to run each tree, by tree ID and blackboard key. */
   payloads: Record<string, Record<string, string>>;
+  /** The tab of the workspace panel last shown: the trees, or the node types. */
+  browserTab: 'trees' | 'nodes';
 }
 
-const DEFAULTS: Settings = { theme: 'auto', rosbridgeUrl: '', runAction: '/commander/execute_objective', payloads: {} };
+const DEFAULTS: Settings = {
+  theme: 'auto', rosbridgeUrl: '', runAction: '/commander/execute_objective', payloads: {}, browserTab: 'trees',
+};
 const KEY = 'be.settings';
 
 function load(): Settings {

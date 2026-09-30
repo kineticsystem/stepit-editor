@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { fileNameFor, filePathError, idError } from '../src/shared/ids';
 import {
-  buildWorkspace, categoryOf, defaultModelsFile, findTree, referencesTo, subtreeRefs, usageCount, usagesOf,
+  buildWorkspace, categoryOf, defaultModelsFile, findTree, isObjective, referencesTo, subtreeCount, subtreeRefs, usageCount,
+  usagesOf,
 } from '../src/shared/workspace';
 import { parseDocument } from '../src/shared/xml';
 
@@ -37,9 +38,25 @@ describe('the workspace', () => {
     expect(usageCount(ws, 'Home')).toBe(0);
   });
 
+  it('counts the SubTree nodes that include a tree', () => {
+    expect(subtreeCount(ws, 'B')).toBe(1);
+    expect(subtreeCount(ws, 'A')).toBe(0);
+  });
+
   it('declares new node types in the file that declares the most', () => {
     expect(defaultModelsFile(WORKSPACE, 'a.xml')).toBe('models.xml');
     expect(defaultModelsFile(files({ 'a.xml': '', 'b.xml': '' }), 'b.xml')).toBe('b.xml');
+  });
+});
+
+describe('objectives and subtrees', () => {
+  const doc = (root: string) => parseDocument(`<root BTCPP_format="4"${root}><BehaviorTree ID="A"><AlwaysSuccess/></BehaviorTree></root>`).doc;
+
+  it('makes the main tree of a file an objective, and any other tree a subtree', () => {
+    expect(isObjective(doc(' main_tree_to_execute="A"'), 'A')).toBe(true);
+    expect(isObjective(doc(' main_tree_to_execute="B"'), 'A')).toBe(false);
+    // Even alone in its file: only main_tree_to_execute makes an objective.
+    expect(isObjective(doc(''), 'A')).toBe(false);
   });
 });
 

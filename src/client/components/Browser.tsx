@@ -1,9 +1,10 @@
 // The left panel: the behavior files of the folder and the trees in each.
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { fileNameFor, filePathError, idError } from '../../shared/ids';
 import { CATEGORIES, isNodeTypeCategory, type NodeModel } from '../../shared/types';
-import { customModels, usageCount } from '../../shared/workspace';
+import type { BehaviorTreeDef } from '../../shared/types';
+import { customModels, isObjective, subtreeCount, usageCount } from '../../shared/workspace';
 import { models, trees } from '../../shared/xml';
 import { treeIds } from '../actions';
 import { confirm, prompt } from '../dialogs';
@@ -12,13 +13,14 @@ import { type Analysis, countBySeverity } from '../hooks';
 import { type FileState, isDirty, useStore } from '../store';
 import { openFolderDialog } from './FolderDialog';
 import { CategoryBadge, Counts, Icon } from './icons';
+import { useSettings } from '../settings';
 import { SettingsMenu } from './SettingsMenu';
-import { Splitter, useStoredSize } from './Splitter';
 
-export async function newBehaviorFile() {
+/** Creates a file with one tree: an objective, or a subtree, which only runs inside another tree. */
+export async function newBehaviorFile(objective = true) {
   const { files, createFile } = useStore.getState();
   const existing = treeIds();
-  const values = await prompt('New objective', [
+  const values = await prompt(objective ? 'New objective' : 'New subtree', [
     {
       name: 'tree', label: 'Tree ID', placeholder: 'PickObject',
       hint: 'The ID other behaviors use to include it as a SubTree',
@@ -30,11 +32,36 @@ export async function newBehaviorFile() {
       validate: (v, all) => filePathError(fileNameFor(v, all.tree), Object.keys(files)),
     },
   ], 'Create');
-  if (values) createFile(fileNameFor(values.file, values.tree), values.tree);
+  if (values) createFile(fileNameFor(values.file, values.tree), values.tree, objective);
 }
 
-type SectionId = 'objectives' | 'behaviors' | 'builtins';
-const SECTIONS: SectionId[] = ['objectives', 'behaviors', 'builtins'];
+/** A group of a tab's list, which can be collapsed. */
+type GroupId = 'objectives' | 'subtrees' | 'behaviors' | 'builtins';
+type TreeSectionId = 'objectives' | 'subtrees';
+
+/**
+ * What a list of trees shows: a tree alone when its file holds only that tree,
+ * so that the list is not cluttered with a file name per tree, and the file
+ * otherwise, with the trees it holds of that list. A file with several trees
+ * may so appear in both lists, and one with no tree, e.g. unreadable, only
+ * among the objectives.
+ */
+type Entry =
+  | { kind: 'tree'; path: string; tree: BehaviorTreeDef }
+  | { kind: 'file'; path: string; trees: BehaviorTreeDef[] };
+
+function entriesOf(files: Record<string, FileState>, section: TreeSectionId): Entry[] {
+  const entries: Entry[] = [];
+  for (const [path, f] of Object.entries(files)) {
+    if (!isObjectiveFile(f)) continue;
+    const all = f.doc ? trees(f.doc) : [];
+    const mine = all.filter((t) => isObjective(f.doc, t.id) === (section === 'objectives'));
+    if (all.length === 1 && mine.length === 1) entries.push({ kind: 'tree', path, tree: mine[0] });
+    else if (mine.length || (!all.length && section === 'objectives')) entries.push({ kind: 'file', path, trees: mine });
+  }
+  const label = (e: Entry) => (e.kind === 'tree' ? e.tree.id : e.path);
+  return entries.sort((a, b) => label(a).localeCompare(label(b)));
+}
 
 /** Files shown under Objectives: all but those that only declare node types. */
 function isObjectiveFile(f: FileState): boolean {
@@ -76,7 +103,8 @@ function NodeTypeRow({ model, uses, active }: { model: NodeModel; uses: number; 
   );
 }
 
-function SectionHeader({ title, count, open, onToggle, children }: {
+/** The header of a group of a list: its name and size, and a button to collapse it. */
+function GroupHeader({ title, count, open, onToggle, children }: {
   title: string;
   count: number;
   open: boolean;
@@ -101,43 +129,121 @@ export function Browser({ analysis }: { analysis: Analysis }) {
   const selection = useStore((s) => s.selection);
   const focusModel = useStore((s) => s.focusModel);
   const { ws, byFile } = analysis;
-  const [objectivesFilter, setObjectivesFilter] = useState('');
-  const [behaviorsFilter, setBehaviorsFilter] = useState('');
-  const [builtinsFilter, setBuiltinsFilter] = useState('');
+  const tab = useSettings((s) => s.browserTab);
+  const setTab = (browserTab: 'trees' | 'nodes') => useSettings.getState().update({ browserTab });
+  const [treesFilter, setTreesFilter] = useState('');
+  const [nodesFilter, setNodesFilter] = useState('');
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
-  const [sections, setSections] = useState<Record<SectionId, boolean>>({ objectives: true, behaviors: true, builtins: true });
-  const [behaviorsHeight, setBehaviorsHeight] = useStoredSize('be.behaviors', 200);
-  const [builtinsHeight, setBuiltinsHeight] = useStoredSize('be.builtins', 220);
-  const toggle = (id: SectionId) => setSections({ ...sections, [id]: !sections[id] });
+  const [groups, setGroups] = useState<Record<GroupId, boolean>>({ objectives: true, subtrees: true, behaviors: true, builtins: true });
+  const toggle = (id: GroupId) => setGroups({ ...groups, [id]: !groups[id] });
 
-  // The first open section fills the panel; every other open section has its
-  // own height, set by the handle above it.
-  const filler = SECTIONS.find((id) => sections[id]);
-  const fixed = (id: SectionId) => sections[id] && id !== filler;
-  const heights: Record<'behaviors' | 'builtins', [number, (v: number) => void]> = {
-    behaviors: [behaviorsHeight, setBehaviorsHeight],
-    builtins: [builtinsHeight, setBuiltinsHeight],
-  };
-  const layout = (id: SectionId) => ({
-    className: `browser-section ${id} ${sections[id] ? 'open' : ''} ${id === filler ? 'fill' : ''} ${fixed(id) ? 'fixed' : ''}`,
-    style: fixed(id) && id !== 'objectives' ? { height: heights[id][0] } : undefined,
-  });
-  /** The handle above a section with its own height; it leaves room for the rest of the panel. */
-  const handle = (id: 'behaviors' | 'builtins', label: string) => {
-    if (!fixed(id)) return null;
-    const other = id === 'behaviors' ? 'builtins' : 'behaviors';
-    const reserve = 250 + (fixed(other) ? heights[other][0] : 36);
-    return <Splitter direction="rows" label={label} value={heights[id][0]} onChange={heights[id][1]} grow={-1} min={70} reserve={reserve} />;
+  // Opening another tree, e.g. from a link or a SubTree, shows the trees. Not
+  // the first tree selected when the folder loads: the tab last used stays.
+  const shownTree = useRef(selection.tree);
+  useEffect(() => {
+    if (shownTree.current && selection.tree && selection.tree !== shownTree.current && !focusModel) setTab('trees');
+    shownTree.current = selection.tree;
+  }, [selection.tree, focusModel]);
+
+  const nodesQuery = nodesFilter.trim().toLowerCase();
+  const objectives = entriesOf(files, 'objectives');
+  const subtrees = entriesOf(files, 'subtrees');
+  const count = (entries: Entry[]) => entries.reduce((n, e) => n + (e.kind === 'tree' ? 1 : e.trees.length), 0);
+
+  /** The delete button of a file, and the markers of its state: unsaved, unreadable, problems. */
+  const fileState = (path: string) => {
+    const f = files[path];
+    return (
+      <>
+        {isDirty(f) && <span className="dirty" title="Unsaved changes">●</span>}
+        {f.error && <span className="count count-error" title={f.error.message}>XML</span>}
+        <Counts {...countBySeverity(byFile.get(path))} />
+        <button className="icon-button row-action" title={`Delete ${path}`}
+          onClick={async (e) => {
+            e.stopPropagation();
+            if (await confirm('Delete file', <>Delete <b>{path}</b> from disk? This cannot be undone.</>)) {
+              await useStore.getState().deleteFile(path);
+            }
+          }}>
+          <Icon name="trash" size={14} />
+        </button>
+      </>
+    );
   };
 
-  const query = objectivesFilter.trim().toLowerCase();
-  const behaviorsQuery = behaviorsFilter.trim().toLowerCase();
-  const paths = Object.keys(files).filter((p) => isObjectiveFile(files[p])).sort((a, b) => a.localeCompare(b));
+  /** How often a subtree is included, or that nothing includes it, so it never runs. */
+  const subtreeUses = (tree: BehaviorTreeDef) => {
+    const uses = subtreeCount(ws, tree.id);
+    return uses > 0
+      ? <span className="uses" title={`Included by ${uses} SubTree node${uses > 1 ? 's' : ''}`}>{uses}×</span>
+      : <span className="uses unused" title="No tree includes it, so it never runs">unused</span>;
+  };
+
+  const treeList = (section: TreeSectionId, entries: Entry[], filter: string) => {
+    const query = filter.trim().toLowerCase();
+    const matches = (path: string, tree: BehaviorTreeDef) => tree.id.toLowerCase().includes(query) || path.toLowerCase().includes(query);
+    const treeRow = (path: string, tree: BehaviorTreeDef, flat: boolean) => (
+      <li key={tree.uid} role="treeitem"
+        className={`tree-row ${flat ? 'flat' : ''} ${selection.tree === tree.uid && !focusModel ? 'active' : ''}`}
+        title={flat ? path : undefined}
+        onClick={() => useStore.getState().select({ file: path, tree: tree.uid })}>
+        <Icon name={section === 'objectives' ? 'tree' : 'subtree'} size={14} className="muted" />
+        <span className="file-name">{tree.id || <i className="muted">no ID</i>}</span>
+        {section === 'subtrees' && subtreeUses(tree)}
+        {flat && fileState(path)}
+      </li>
+    );
+    return (
+      <ul role="tree" aria-label={section === 'objectives' ? 'Objectives' : 'Subtrees'}>
+        {entries.map((entry) => {
+          const { path } = entry;
+          if (entry.kind === 'tree') return query && !matches(path, entry.tree) ? null : treeRow(path, entry.tree, true);
+          const shown = query ? entry.trees.filter((t) => matches(path, t)) : entry.trees;
+          if (query && !path.toLowerCase().includes(query) && !shown.length) return null;
+          const key = `${section}:${path}`;
+          const open = query ? true : !collapsed[key];
+          const slash = path.lastIndexOf('/');
+          return (
+            <li key={key} role="treeitem" aria-expanded={open}>
+              <div className={`file-row ${selection.file === path && !selection.tree && !focusModel ? 'active' : ''}`}
+                onClick={() => useStore.getState().selectFile(path)}>
+                <button className={`chevron ${open ? 'open' : ''} ${entry.trees.length ? '' : 'hidden'}`}
+                  onClick={(e) => { e.stopPropagation(); setCollapsed({ ...collapsed, [key]: open }); }}
+                  aria-label={open ? 'Collapse' : 'Expand'}>
+                  <Icon name="chevron" size={12} />
+                </button>
+                <Icon name="file" size={14} className="muted" />
+                <span className="file-name" title={path}>
+                  {slash >= 0 && <span className="muted">{path.slice(0, slash + 1)}</span>}
+                  {path.slice(slash + 1)}
+                </span>
+                {fileState(path)}
+              </div>
+              {open && <ul role="group">{shown.map((t) => treeRow(path, t, false))}</ul>}
+            </li>
+          );
+        })}
+        {query && entries.length > 0 && !entries.some((e) => (e.kind === 'tree' ? matches(e.path, e.tree) : e.path.toLowerCase().includes(query) || e.trees.some((t) => matches(e.path, t)))) && (
+          <li className="empty">No {section === 'objectives' ? 'objective' : 'subtree'} matches “{filter}”.</li>
+        )}
+        {!entries.length && section === 'objectives' && (
+          <li className="empty">
+            No objectives in this folder.
+            <button className="link" onClick={() => void newBehaviorFile()}>Create an objective</button>
+          </li>
+        )}
+        {!entries.length && section === 'subtrees' && (
+          <li className="empty">
+            No subtrees. A tree that is not the main tree of its file is a subtree: it runs only inside another tree.
+          </li>
+        )}
+      </ul>
+    );
+  };
   const behaviors = customModels(ws);
-  const shownBehaviors = behaviorsQuery ? behaviors.filter((m) => m.id.toLowerCase().includes(behaviorsQuery)) : behaviors;
+  const shownBehaviors = nodesQuery ? behaviors.filter((m) => m.id.toLowerCase().includes(nodesQuery)) : behaviors;
   const builtins = [...ws.builtins.values()].filter((m) => m.category !== 'SubTree');
-  const builtinsQuery = builtinsFilter.trim().toLowerCase();
-  const shownBuiltins = builtinsQuery ? builtins.filter((m) => m.id.toLowerCase().includes(builtinsQuery)) : builtins;
+  const shownBuiltins = nodesQuery ? builtins.filter((m) => m.id.toLowerCase().includes(nodesQuery)) : builtins;
   const usage = new Map([...behaviors, ...builtins].map((m) => [m.id, usageCount(ws, m.id)]));
 
   return (
@@ -156,124 +262,75 @@ export function Browser({ analysis }: { analysis: Analysis }) {
         <Icon name="folder" size={14} /> <span>{root}</span> <Icon name="open" size={12} />
       </button>
 
-      <section {...layout('objectives')}>
-        <SectionHeader title="Objectives" count={paths.length} open={sections.objectives} onToggle={() => toggle('objectives')}>
-          <button className="icon-button" title="New objective" onClick={() => void newBehaviorFile()}>
-            <Icon name="newFile" size={14} />
-          </button>
-        </SectionHeader>
-        {sections.objectives && (
-          <SearchBox placeholder="Filter objectives" value={objectivesFilter} onChange={setObjectivesFilter} />
-        )}
-        {sections.objectives && (
-          <ul className="file-list" role="tree" aria-label="Objectives">
-            {paths.map((path) => {
-              const f = files[path];
-              const fileTrees = f.doc ? trees(f.doc) : [];
-              const matchingTrees = query ? fileTrees.filter((t) => t.id.toLowerCase().includes(query)) : fileTrees;
-              if (query && !path.toLowerCase().includes(query) && !matchingTrees.length) return null;
-              const open = query ? true : !collapsed[path];
-              const slash = path.lastIndexOf('/');
-              return (
-                <li key={path} role="treeitem" aria-expanded={open}>
-                  <div className={`file-row ${selection.file === path && !focusModel ? 'active' : ''}`}
-                    onClick={() => useStore.getState().selectFile(path)}>
-                    <button className={`chevron ${open ? 'open' : ''} ${fileTrees.length ? '' : 'hidden'}`}
-                      onClick={(e) => { e.stopPropagation(); setCollapsed({ ...collapsed, [path]: open }); }}
-                      aria-label={open ? 'Collapse' : 'Expand'}>
-                      <Icon name="chevron" size={12} />
-                    </button>
-                    <Icon name="file" size={14} className="muted" />
-                    <span className="file-name" title={path}>
-                      {slash >= 0 && <span className="muted">{path.slice(0, slash + 1)}</span>}
-                      {path.slice(slash + 1)}
-                    </span>
-                    {isDirty(f) && <span className="dirty" title="Unsaved changes">●</span>}
-                    {f.error && <span className="count count-error" title={f.error.message}>XML</span>}
-                    <Counts {...countBySeverity(byFile.get(path))} />
-                    <button className="icon-button row-action" title="Delete file"
-                      onClick={async (e) => {
-                        e.stopPropagation();
-                        if (await confirm('Delete file', <>Delete <b>{path}</b> from disk? This cannot be undone.</>)) {
-                          await useStore.getState().deleteFile(path);
-                        }
-                      }}>
-                      <Icon name="trash" size={14} />
-                    </button>
-                  </div>
-                  {open && (
-                    <ul role="group">
-                      {matchingTrees.map((t) => (
-                        <li key={t.uid} role="treeitem"
-                          className={`tree-row ${selection.tree === t.uid && !focusModel ? 'active' : ''}`}
-                          onClick={() => useStore.getState().select({ file: path, tree: t.uid })}>
-                          <Icon name="tree" size={14} className="muted" />
-                          <span>{t.id || <i className="muted">no ID</i>}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </li>
-              );
-            })}
-            {!paths.length && (
-              <li className="empty">
-                No objectives in this folder.
-                <button className="link" onClick={() => void newBehaviorFile()}>Create an objective</button>
-              </li>
-            )}
-          </ul>
-        )}
-      </section>
+      <div className="segmented browser-tabs" role="tablist" aria-label="Workspace">
+        <button role="tab" aria-selected={tab === 'trees'} className={tab === 'trees' ? 'active' : ''} onClick={() => setTab('trees')}>
+          <Icon name="tree" size={14} /> Trees
+        </button>
+        <button role="tab" aria-selected={tab === 'nodes'} className={tab === 'nodes' ? 'active' : ''} onClick={() => setTab('nodes')}>
+          <Icon name="nodes" size={14} /> Nodes
+        </button>
+      </div>
 
-      {handle('behaviors', 'Resize the behaviors list')}
-      <section {...layout('behaviors')}>
-        <SectionHeader title="Behaviors" count={behaviors.length} open={sections.behaviors} onToggle={() => toggle('behaviors')} />
-        {sections.behaviors && (
-          <SearchBox placeholder="Filter behaviors" value={behaviorsFilter} onChange={setBehaviorsFilter} />
-        )}
-        {sections.behaviors && (
-          <ul className="file-list" aria-label="Behaviors">
-            {shownBehaviors.map((m) => (
-              <NodeTypeRow key={m.id} model={m} uses={usage.get(m.id) ?? 0} active={focusModel === m.id} />
-            ))}
-            {behaviors.length > 0 && !shownBehaviors.length && <li className="empty">No behavior matches “{behaviorsFilter}”.</li>}
-            {!behaviors.length && (
-              <li className="empty">
-                No behaviors declared. Declare your C++ nodes in a TreeNodesModel, e.g. generated with
-                BT::writeTreeNodesModelXML.
-              </li>
+      {tab === 'trees' ? (
+        <section className="browser-section open fill" role="tabpanel" aria-label="Trees">
+          <SearchBox placeholder="Filter trees" value={treesFilter} onChange={setTreesFilter} />
+          <div className="file-list">
+            <GroupHeader title="Objectives" count={count(objectives)} open={groups.objectives} onToggle={() => toggle('objectives')}>
+              <button className="icon-button" title="New objective" onClick={() => void newBehaviorFile()}>
+                <Icon name="newFile" size={14} />
+              </button>
+            </GroupHeader>
+            {groups.objectives && treeList('objectives', objectives, treesFilter)}
+            <GroupHeader title="Subtrees" count={count(subtrees)} open={groups.subtrees} onToggle={() => toggle('subtrees')}>
+              <button className="icon-button" title="New subtree" onClick={() => void newBehaviorFile(false)}>
+                <Icon name="newFile" size={14} />
+              </button>
+            </GroupHeader>
+            {groups.subtrees && treeList('subtrees', subtrees, treesFilter)}
+          </div>
+        </section>
+      ) : (
+        <section className="browser-section open fill" role="tabpanel" aria-label="Nodes">
+          <SearchBox placeholder="Filter nodes" value={nodesFilter} onChange={setNodesFilter} />
+          <div className="file-list">
+            <GroupHeader title="Behaviors" count={behaviors.length} open={groups.behaviors} onToggle={() => toggle('behaviors')} />
+            {groups.behaviors && (
+              <ul aria-label="Behaviors">
+                {shownBehaviors.map((m) => (
+                  <NodeTypeRow key={m.id} model={m} uses={usage.get(m.id) ?? 0} active={focusModel === m.id} />
+                ))}
+                {behaviors.length > 0 && !shownBehaviors.length && <li className="empty">No behavior matches “{nodesFilter}”.</li>}
+                {!behaviors.length && (
+                  <li className="empty">
+                    No behaviors declared. Declare your C++ nodes in a TreeNodesModel, e.g. generated with
+                    BT::writeTreeNodesModelXML.
+                  </li>
+                )}
+              </ul>
             )}
-          </ul>
-        )}
-      </section>
-
-      {handle('builtins', 'Resize the built-in nodes list')}
-      <section {...layout('builtins')}>
-        <SectionHeader title="Built-in nodes" count={builtins.length} open={sections.builtins} onToggle={() => toggle('builtins')} />
-        {sections.builtins && (
-          <SearchBox placeholder="Filter built-in nodes" value={builtinsFilter} onChange={setBuiltinsFilter} />
-        )}
-        {sections.builtins && (
-          <ul className="file-list" aria-label="Built-in nodes">
-            {CATEGORIES.filter(isNodeTypeCategory).map((category) => {
-              const group = shownBuiltins.filter((m) => m.category === category).sort((a, b) => a.id.localeCompare(b.id));
-              if (!group.length) return null;
-              return (
-                <li key={category}>
-                  <div className="group-label">{category}</div>
-                  <ul>
-                    {group.map((m) => (
-                      <NodeTypeRow key={m.id} model={m} uses={usage.get(m.id) ?? 0} active={focusModel === m.id} />
-                    ))}
-                  </ul>
-                </li>
-              );
-            })}
-            {!shownBuiltins.length && <li className="empty">No built-in node matches “{builtinsFilter}”.</li>}
-          </ul>
-        )}
-      </section>
+            <GroupHeader title="Built-in nodes" count={builtins.length} open={groups.builtins} onToggle={() => toggle('builtins')} />
+            {groups.builtins && (
+              <ul aria-label="Built-in nodes">
+                {CATEGORIES.filter(isNodeTypeCategory).map((category) => {
+                  const group = shownBuiltins.filter((m) => m.category === category).sort((a, b) => a.id.localeCompare(b.id));
+                  if (!group.length) return null;
+                  return (
+                    <li key={category}>
+                      <div className="group-label">{category}</div>
+                      <ul>
+                        {group.map((m) => (
+                          <NodeTypeRow key={m.id} model={m} uses={usage.get(m.id) ?? 0} active={focusModel === m.id} />
+                        ))}
+                      </ul>
+                    </li>
+                  );
+                })}
+                {!shownBuiltins.length && <li className="empty">No built-in node matches “{nodesFilter}”.</li>}
+              </ul>
+            )}
+          </div>
+        </section>
+      )}
     </aside>
   );
 }
