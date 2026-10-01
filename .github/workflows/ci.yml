@@ -1,6 +1,5 @@
-# Type-checks, tests and builds the editor on every push and pull request.
-# The native validator is not built here: it needs BehaviorTree.CPP, which only
-# the Docker image compiles.
+# Type-checks, tests and builds the editor on every push and pull request, and
+# tests the native validator, built against BehaviorTree.CPP.
 
 name: CI
 
@@ -23,3 +22,44 @@ jobs:
       - run: pnpm run typecheck
       - run: pnpm run test
       - run: pnpm run build
+
+  # The native validator, built against the ROS package of BehaviorTree.CPP:
+  # the library the commander loads trees with, the same version, 4.10.0, as
+  # the Docker image builds from source. Its own tests,
+  # tests/native-real.test.ts, run only where it is built, i.e. here.
+  native:
+    name: native validator
+    runs-on: ubuntu-24.04
+    container: ros:jazzy-ros-base
+    defaults:
+      run:
+        shell: bash
+    steps:
+      # nodejs runs the JavaScript actions below under act, which does not
+      # provide one in a container as GitHub does; setup-node installs the
+      # Node.js the editor uses.
+      - name: Install BehaviorTree.CPP
+        run: apt-get update -qq && apt-get install -qq -y ros-jazzy-behaviortree-cpp nodejs
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Build the validator
+        # Steps bypass the image's entrypoint, which would source ROS.
+        run: |
+          source /opt/ros/jazzy/setup.bash
+          cmake -S validator -B build/validator -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=/opt/ros/jazzy
+          cmake --build build/validator --parallel
+      # The validator finds the libraries of the ROS package through the
+      # environment of ROS.
+      - name: Test, with the real validator
+        run: |
+          source /opt/ros/jazzy/setup.bash
+          BTCPP_VALIDATOR_REAL="$PWD/build/validator/btcpp_validate" pnpm run test
+      - name: Validate the examples
+        run: |
+          source /opt/ros/jazzy/setup.bash
+          pnpm run validate behaviors
