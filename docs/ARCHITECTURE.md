@@ -392,11 +392,14 @@ The tests are in [`tests`](../tests) and run with [Vitest](https://vitest.dev/) 
 | `treeOps.test.ts`, `workspace.test.ts`, `payload.test.ts` | The edits of trees and documents, the workspace queries, IDs and file names, and the payload of a tree. |
 | `api.test.ts` | The HTTP API on a temporary folder: ETags, 412 and 409, paths and folders refused, bodies too large. |
 | `native.test.ts` | Running the native validator, with a fake one in [`tests/fixtures/fake-validator`](../tests/fixtures/fake-validator). |
+| `native-real.test.ts` | The native validator itself, built against BehaviorTree.CPP: what it accepts and rejects, and the built-in nodes it reports. It runs only where `BTCPP_VALIDATOR_REAL` names the built program, as in CI, and is skipped elsewhere. |
 | `store.test.ts`, `actions.test.ts` | Loading, undo, saving and conflicts, and the commands, against an in-memory server ([`fakeServer.ts`](../tests/fakeServer.ts)). |
 | `ros.test.ts` | The rosbridge protocol, with a fake WebSocket. |
 | `cli.test.ts` | The command line validator and its exit code. |
 
-The React components and the C++ validator have no automated tests: the components are thin over the commands, and the validator is checked by using it.
+CI has two jobs. The first type-checks, tests and builds the editor. The second runs in a `ros:jazzy-ros-base` container: it builds the native validator against the ROS package of BehaviorTree.CPP, the library and the version the commander loads trees with, runs every test with the real validator, and validates the examples.
+
+The React components have no automated tests: they are thin over the commands.
 
 ## How to Extend the Editor
 

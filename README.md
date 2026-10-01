@@ -1,5 +1,7 @@
 # StepIt Editor
 
+[![CI](https://github.com/kineticsystem/stepit-editor/actions/workflows/ci.yml/badge.svg)](https://github.com/kineticsystem/stepit-editor/actions/workflows/ci.yml)
+
 ## Table of Contents <!-- omit in toc -->
 
 - [StepIt Editor](#stepit-editor)
