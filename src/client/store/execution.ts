@@ -7,7 +7,7 @@ export const executionSlice: Slice<ExecutionSlice> = (set, get) => ({
   executionShown: false,
 
   startExecution(treeId) {
-    set({ execution: { treeId, statuses: {}, messages: [], startedAt: Date.now() }, executionShown: true });
+    set({ execution: { treeId, statuses: {}, progress: {}, messages: [], startedAt: Date.now() }, executionShown: true });
   },
 
   applyFeedback(message) {
@@ -23,6 +23,7 @@ export const executionSlice: Slice<ExecutionSlice> = (set, get) => ({
         ...execution,
         tree: feedback.tree !== undefined ? parseExecutedTree(feedback.tree) ?? execution.tree : execution.tree,
         statuses: { ...execution.statuses, ...feedback.nodes },
+        progress: { ...execution.progress, ...feedback.progress },
       },
     });
   },
@@ -36,7 +37,7 @@ export const executionSlice: Slice<ExecutionSlice> = (set, get) => ({
     // no last feedback.
     const statuses = Object.fromEntries(Object.entries(execution.statuses)
       .map(([uid, status]) => [uid, status === 'RUNNING' ? 'HALTED' : status] as const));
-    set({ execution: { ...execution, statuses, result, crashed, endedAt: Date.now() } });
+    set({ execution: { ...execution, statuses, progress: {}, result, crashed, endedAt: Date.now() } });
     if (!get().executionShown) {
       get().toast(`${execution.treeId}: ${result.ok ? 'succeeded' : result.outcome === 'canceled' ? 'stopped' : 'failed'}`,
         result.ok ? 'info' : 'error');
