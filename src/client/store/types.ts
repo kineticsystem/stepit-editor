@@ -11,7 +11,7 @@
 import type { StateCreator } from 'zustand';
 import type { NativeResult } from '../../server/native';
 import type { BTDocument, BTNode, NodeModel, ParseError } from '../../shared/types';
-import type { ExecutedTree, ExecutionStatus } from '../execution';
+import type { ExecutedTree, ExecutionStatus, NodeProgress } from '../execution';
 import type { RunResult } from '../ros';
 
 export interface FileState {
@@ -165,6 +165,8 @@ export interface Execution {
   tree?: ExecutedTree;
   /** The last status of each node, by _uid. */
   statuses: Record<string, ExecutionStatus>;
+  /** The last progress of each node that reports one, by _uid: shown while it runs. */
+  progress: Record<string, NodeProgress>;
   /** Feedback that is not a status, as plain text. */
   messages: string[];
   /** The _uid of a node that threw, from the error message of the server. */

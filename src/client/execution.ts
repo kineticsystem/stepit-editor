@@ -1,13 +1,16 @@
 // The execution of a tree on the server, as StepIt Commander reports it in the
 // feedback of its ExecuteTree action: a JSON object per message,
 //
-//   {"tree": "<root>...</root>", "nodes": {"3": "RUNNING", "4": "FAILURE"}}
+//   {"tree": "<root>...</root>", "nodes": {"3": "RUNNING", "4": "FAILURE"},
+//    "progress": {"3": {"done": 2, "total": 11}}}
 //
 // `tree`, in the first message only, is the tree being executed as written by
 // BT::WriteTreeToXML: every subtree expanded into a <BehaviorTree> of its own,
 // told apart by its _fullpath, and every node carrying its _uid. `nodes` are the
 // nodes whose status changed since, by _uid, each with its last status, or
 // HALTED for a node stopped while running, e.g. by a reactive parent.
+// `progress`, only when one changed, is how far some running nodes are, by
+// _uid: those whose behavior reports it, done out of total in a unit of its own.
 
 import { isDisabled } from '../shared/treeOps';
 import type { BehaviorTreeDef, BTNode } from '../shared/types';
@@ -18,9 +21,28 @@ export type ExecutionStatus = 'RUNNING' | 'SUCCESS' | 'FAILURE' | 'SKIPPED' | 'H
 
 const STATUSES = new Set<string>(['RUNNING', 'SUCCESS', 'FAILURE', 'SKIPPED', 'HALTED']);
 
+/** How far a running node is: done out of total, e.g. 3 of 11 iterations. */
+export interface NodeProgress {
+  done: number;
+  total: number;
+}
+
 export interface ExecutionFeedback {
   tree?: string;
   nodes: Record<string, ExecutionStatus>;
+  progress?: Record<string, NodeProgress>;
+}
+
+function parseProgress(data: unknown): Record<string, NodeProgress> | undefined {
+  if (typeof data !== 'object' || data === null) return undefined;
+  const out: Record<string, NodeProgress> = {};
+  for (const [uid, value] of Object.entries(data)) {
+    const { done, total } = (value ?? {}) as { done?: unknown; total?: unknown };
+    if (typeof done === 'number' && typeof total === 'number' && Number.isFinite(done) && total > 0) {
+      out[uid] = { done, total };
+    }
+  }
+  return out;
 }
 
 /** The feedback of a message, or undefined for any other message, e.g. plain text. */
@@ -32,13 +54,25 @@ export function parseFeedback(message: string): ExecutionFeedback | undefined {
     return undefined;
   }
   if (typeof data !== 'object' || data === null) return undefined;
-  const { tree, nodes } = data as { tree?: unknown; nodes?: unknown };
+  const { tree, nodes, progress } = data as { tree?: unknown; nodes?: unknown; progress?: unknown };
   if (typeof nodes !== 'object' || nodes === null || (tree !== undefined && typeof tree !== 'string')) return undefined;
   const out: Record<string, ExecutionStatus> = {};
   for (const [uid, status] of Object.entries(nodes)) {
     if (typeof status === 'string' && STATUSES.has(status)) out[uid] = status as ExecutionStatus;
   }
-  return { tree: tree as string | undefined, nodes: out };
+  return { tree: tree as string | undefined, nodes: out, progress: parseProgress(progress) };
+}
+
+/** The fraction done, from 0 to 1. */
+export function progressFraction(progress: NodeProgress): number {
+  return Math.min(1, Math.max(0, progress.done / progress.total));
+}
+
+/** A progress in a few characters: "3 / 11" for a count, a percentage otherwise. */
+export function progressLabel(progress: NodeProgress): string {
+  const { done, total } = progress;
+  if (Number.isInteger(done) && Number.isInteger(total)) return `${done} / ${total}`;
+  return `${Math.round(progressFraction(progress) * 100)}%`;
 }
 
 /**

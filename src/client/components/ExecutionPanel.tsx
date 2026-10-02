@@ -1,13 +1,15 @@
 // The center panel while a tree runs on the server, in place of the tree
 // editor: the tree as the server executes it, subtrees included, with the last
-// status of each node. It looks like the tree editor, read-only.
+// status of each node, and the progress of a running node that reports one. It
+// looks like the tree editor, read-only.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { BTNode } from '../../shared/types';
 import { categoryOf, findTree, type Workspace } from '../../shared/workspace';
 import { stopRun } from '../actions';
 import {
-  type ExecutedTree, executionKey, type ExecutionRow, executionRows, type ExecutionStatus, failureCauses, outcomeLabel,
+  type ExecutedTree, executionKey, type ExecutionRow, executionRows, type ExecutionStatus, failureCauses, type NodeProgress,
+  outcomeLabel, progressFraction, progressLabel,
 } from '../execution';
 import type { Analysis } from '../hooks';
 import { type Execution, useStore } from '../store';
@@ -36,6 +38,19 @@ function RunState({ execution }: { execution: Execution }) {
   const { result } = execution;
   if (!result) return <span className="exec-state exec-running"><span className="exec-dot" /> Running</span>;
   return <span className={`exec-state ${result.ok ? 'exec-success' : 'exec-failure'}`}>{outcomeLabel(result)}</span>;
+}
+
+/** How far a running node is, for a node that reports it. */
+function ProgressCell({ progress }: { progress: NodeProgress }) {
+  const percent = Math.round(progressFraction(progress) * 100);
+  return (
+    <span className="exec-progress">
+      <span className="exec-progress-bar" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent}>
+        <span style={{ width: `${percent}%` }} />
+      </span>
+      <span className="exec-progress-label">{progressLabel(progress)}</span>
+    </span>
+  );
 }
 
 function StatusCell({ status }: { status?: ExecutionStatus }) {
@@ -132,6 +147,7 @@ export function ExecutionPanel({ analysis }: { analysis: Analysis }) {
           </div>
           {rows.map((row) => {
             const status = statusOf(row);
+            const progress = status === 'RUNNING' ? execution.progress[row.key] : undefined;
             const className = [
               'row',
               status ? `exec-row-${status.toLowerCase()}` : 'exec-row-idle',
@@ -148,6 +164,7 @@ export function ExecutionPanel({ analysis }: { analysis: Analysis }) {
                 </button>
                 <NodeLabel node={row.node} category={categoryOf(ws, row.node)} />
                 <span className="row-spacer" />
+                {progress && <ProgressCell progress={progress} />}
                 <StatusCell status={status} />
               </div>
             );

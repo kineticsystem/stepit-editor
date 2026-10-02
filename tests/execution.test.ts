@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  executionKey, executionRows, failedNodeUid, failureCauses, outcomeLabel, parseExecutedTree, parseFeedback,
+  executionKey, executionRows, failedNodeUid, failureCauses, outcomeLabel, parseExecutedTree, parseFeedback, progressLabel,
 } from '../src/client/execution';
 
 vi.mock('../src/client/api', async (original) => {
@@ -36,6 +36,17 @@ const EXECUTED = `<root BTCPP_format="4">
 </root>`;
 
 describe('parseFeedback', () => {
+  it('reads the progress of the nodes that report one', () => {
+    expect(parseFeedback('{"nodes": {}, "progress": {"3": {"done": 2, "total": 11}}}')?.progress)
+      .toEqual({ 3: { done: 2, total: 11 } });
+  });
+
+  it('drops a progress that is not one', () => {
+    expect(parseFeedback('{"nodes": {}, "progress": {"1": {"done": 1, "total": 0}, "2": {"done": "a", "total": 3}, "3": 5}}')?.progress)
+      .toEqual({});
+    expect(parseFeedback('{"nodes": {}}')?.progress).toBeUndefined();
+  });
+
   it('reads the tree and the statuses', () => {
     expect(parseFeedback(JSON.stringify({ tree: '<root/>', nodes: { 1: 'RUNNING', 2: 'FAILURE' } })))
       .toEqual({ tree: '<root/>', nodes: { 1: 'RUNNING', 2: 'FAILURE' } });
@@ -111,6 +122,13 @@ describe('the executed tree', () => {
   });
 });
 
+describe('progressLabel', () => {
+  it('counts a whole number of steps, and gives a percentage otherwise', () => {
+    expect(progressLabel({ done: 3, total: 11 })).toBe('3 / 11');
+    expect(progressLabel({ done: 2.1, total: 5 })).toBe('42%');
+  });
+});
+
 describe('the execution in the store', () => {
   const s = () => useStore.getState();
   beforeEach(() => useStore.setState({ execution: undefined, executionShown: false, toasts: [] }));
@@ -124,6 +142,16 @@ describe('the execution in the store', () => {
     expect(s().execution?.tree?.root.id).toBe('Main');
     expect(s().execution?.statuses).toEqual({ 1: 'RUNNING', 2: 'SUCCESS', 4: 'FAILURE' });
     expect(s().execution?.messages).toEqual(['a plain message']);
+  });
+
+  it('keeps the last progress of each node, and forgets it when the run ends', () => {
+    s().startExecution('Main');
+    s().applyFeedback(JSON.stringify({ tree: EXECUTED, nodes: { 1: 'RUNNING' }, progress: { 1: { done: 0, total: 3 } } }));
+    s().applyFeedback(JSON.stringify({ nodes: {}, progress: { 1: { done: 1, total: 3 } } }));
+    s().applyFeedback(JSON.stringify({ nodes: { 2: 'SUCCESS' } }));
+    expect(s().execution?.progress).toEqual({ 1: { done: 1, total: 3 } });
+    s().endExecution({ ok: true, outcome: 'succeeded', message: '' });
+    expect(s().execution?.progress).toEqual({});
   });
 
   it('marks the nodes still running when the run ends as halted', () => {

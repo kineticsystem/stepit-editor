@@ -365,6 +365,11 @@ button.root-path:hover > svg:last-child { opacity: 1; }
 .exec-status.exec-success { color: var(--ok); }
 .exec-status.exec-failure { color: var(--error); font-weight: 600; }
 .exec-status.exec-halted, .exec-status.exec-skipped { color: var(--muted); }
+.exec-progress { display: inline-flex; align-items: center; gap: 6px; margin-right: 10px; font-size: 12px; color: var(--accent); flex: none; }
+.exec-progress-bar { width: 80px; height: 4px; border-radius: 2px; background: var(--border); overflow: hidden; }
+.exec-progress-bar > span { display: block; height: 100%; background: var(--accent); transition: width 0.2s ease-out; }
+.exec-progress-label { font-variant-numeric: tabular-nums; min-width: 4ch; text-align: right; }
+@media (prefers-reduced-motion: reduce) { .exec-progress-bar > span { transition: none; } }
 .row.exec-row-running { background-color: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
 .row.exec-row-failure { background-color: var(--error-soft); box-shadow: inset 3px 0 0 var(--error); }
 .execution-log { max-height: 30%; }
