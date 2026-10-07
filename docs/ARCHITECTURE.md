@@ -369,7 +369,7 @@ The screen is laid out in [`App.tsx`](../src/client/App.tsx), which also handles
 | [`Inspector`](../src/client/components/Inspector.tsx) | Right | The details of the selection: a node's ports and scripts, a tree's ID and interface, or a node type and where it is used. |
 | [`AddNodeDialog`](../src/client/components/AddNodeDialog.tsx) | Dialog | The palette to add a node or a SubTree, wrap the selection, or declare a new node type. |
 | [`RunDialog`](../src/client/components/RunDialog.tsx) | Dialog | The payload of a tree, before running it on the robot. |
-| [`ExecutionPanel`](../src/client/components/ExecutionPanel.tsx) | Center | The run of the server, of this editor or started elsewhere: the status of each node, and what failed; Stop for a run of this editor. |
+| [`ExecutionPanel`](../src/client/components/ExecutionPanel.tsx) | Center | The run of the server, of this editor or started elsewhere: the status of each node, and what failed; Stop, which cancels the goal of a run of this editor, or every goal of the server for a run started elsewhere (`cancelAllGoals`). |
 | [`Ports`](../src/client/components/Ports.tsx) | Shared | The ports of a node type, as shown by the details panel and by a file of node models. |
 
 Dialogs are opened from anywhere with the promise-based helpers of [`dialogs.tsx`](../src/client/dialogs.tsx), e.g. `await confirm(...)` or `await choose(...)`, and rendered by a single `DialogHost`.
