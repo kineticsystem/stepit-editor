@@ -11,6 +11,8 @@ export interface Settings {
   rosbridgeUrl: string;
   /** The ExecuteTree action of the BehaviorTree.ROS2 server that runs the trees. */
   runAction: string;
+  /** The topic on which StepIt Commander publishes every run, for the Execution tab; empty to follow none. */
+  executionTopic: string;
   /** The payload last used to run each tree, by tree ID and blackboard key. */
   payloads: Record<string, Record<string, string>>;
   /** The tab of the workspace panel last shown: the trees, or the node types. */
@@ -18,7 +20,8 @@ export interface Settings {
 }
 
 const DEFAULTS: Settings = {
-  theme: 'auto', rosbridgeUrl: '', runAction: '/commander/execute_objective', payloads: {}, browserTab: 'trees',
+  theme: 'auto', rosbridgeUrl: '', runAction: '/commander/execute_objective', executionTopic: '/stepit_server/execution',
+  payloads: {}, browserTab: 'trees',
 };
 const KEY = 'be.settings';
 

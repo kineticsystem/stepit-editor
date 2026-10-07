@@ -131,6 +131,8 @@ ros2 launch rosbridge_server rosbridge_websocket_launch.xml
 
 The dialog lists the payload the tree reads, i.e. every `{@key}` of the global blackboard, with YAML values such as `3.0` or `[joint1, joint2]`. A tree describes its payload in a `<TreeNodesModel>`, as the ports of its own `<SubTree>` model, one per entry: the description goes under the field, and the example that ends it, after `e.g.`, goes in the field, e.g. `joint1 or [joint1, joint2]` for a port described as `the joints to move, e.g. joint1 or [joint1, joint2]`. The editor warns when a tree with such a model reads an entry it does not declare, and notes a tree that reads a payload without one. By default the editor connects to `ws://<host>:9090` and calls the action `/commander/execute_objective`; both can be changed under *Connection*.
 
+The center panel has two tabs: **Editor**, the tree being edited, and **Execution**, the run of the server. Running a tree opens the Execution tab: the tree as the server runs it, every subtree expanded, with the status of each node, and **Stop**. The Execution tab also follows the runs that other clients start, e.g. StepIt UI or the gamepad: the tab shows the name of the run, with a blue dot while it runs, but never takes the editor away; open it to see the run, which says *started elsewhere*. A page opened in the middle of a run shows it at once. Only a run started from this editor can be stopped here. This needs StepIt Commander, which publishes every run on the topic `/stepit_server/execution`, under *Connection* too; with another server, the Execution tab shows the runs of this editor only, see [Monitoring a Run from Another Server](#monitoring-a-run-from-another-server).
+
 Unsaved changes are saved first, and StepIt Commander reads the tree files again before each goal whenever one changed, so the tree runs as just saved, new files included.
 
 > [!IMPORTANT]
@@ -213,6 +215,17 @@ While a tree runs, the editor shows the status of each node only if the server r
 - `tree`, in the first message only: `BT::WriteTreeToXML(tree, true, false)`, which gives every node its `_uid`.
 - `nodes`: the nodes whose status changed since the previous message, by `_uid`: `RUNNING`, `SUCCESS`, `FAILURE`, `SKIPPED`, or `HALTED` for a node that went from `RUNNING` straight back to `IDLE`. Record them with a `BT::StatusChangeLogger`, ignore any other return to `IDLE`, and send them after the last tick too.
 
-`ExecutionStatus`, in `src/stepit_server` of [StepIt Commander](https://github.com/kineticsystem/stepit-commander), does exactly this and can be copied.
+To let the editor follow the runs that other clients start, and show a run to a page opened in its middle, also publish the whole run on a latched topic, `std_msgs/String`, reliable and transient local, whenever it changes and once more when it ends:
+
+```json
+{"run": 7, "objective": "Main", "tree": "<root>...</root>", "nodes": {"3": "SUCCESS", "4": "RUNNING"},
+ "progress": {}, "running": true}
+```
+
+- `run`: a number of the run, also sent in the first feedback message, so that the editor tells its own run on the topic.
+- `nodes`: every node that has run, with its last status.
+- `running` false once it ended, with `status`, how the tree ended, `SUCCESS` or `FAILURE`, `cancelled`, and `message`, e.g. why it was preempted.
+
+`ExecutionStatus`, in `src/stepit_server` of [StepIt Commander](https://github.com/kineticsystem/stepit-commander), does exactly this and can be copied; the server publishes the snapshots on `~/execution`.
 
 ![The execution of Main: the battery check failed, so the robot docked and is charging](docs/execution.png)

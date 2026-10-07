@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { EXECUTE_TREE, runTree } from '../src/client/ros';
+import { EXECUTE_TREE, FOLLOW_RETRY_MS, followExecution, runTree } from '../src/client/ros';
 
 /** A WebSocket that records what is sent, and lets the test answer. */
 class FakeSocket {
@@ -79,3 +79,44 @@ describe('running a tree through rosbridge', () => {
     expect(FakeSocket.last.sent[1]).toMatchObject({ op: 'cancel_action_goal', action: '/run', id: FakeSocket.last.sent[0].id });
   });
 });
+
+describe('following the runs of the server', () => {
+  beforeEach(() => {
+    vi.stubGlobal('WebSocket', FakeSocket);
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  const follow = (onMessage = vi.fn()) =>
+    followExecution({ url: 'ws://robot:9090', topic: '/stepit_server/execution', onMessage });
+
+  it('subscribes to the topic and passes on its messages', () => {
+    const onMessage = vi.fn();
+    follow(onMessage);
+    const socket = FakeSocket.last;
+    socket.open();
+    expect(socket.sent[0]).toMatchObject({ op: 'subscribe', topic: '/stepit_server/execution', type: 'std_msgs/msg/String' });
+    socket.receive({ op: 'publish', topic: '/other', msg: { data: 'not ours' } });
+    socket.receive({ op: 'publish', topic: '/stepit_server/execution', msg: { data: '{"run": 1}' } });
+    expect(onMessage).toHaveBeenCalledExactlyOnceWith('{"run": 1}');
+  });
+
+  it('connects again when the connection closes, until closed', () => {
+    const following = follow();
+    const first = FakeSocket.last;
+    first.onclose?.();
+    vi.advanceTimersByTime(FOLLOW_RETRY_MS);
+    const second = FakeSocket.last;
+    expect(second).not.toBe(first);
+
+    following.close();
+    expect(second.readyState).toBe(3);
+    second.onclose?.();
+    vi.advanceTimersByTime(FOLLOW_RETRY_MS * 2);
+    expect(FakeSocket.last).toBe(second);
+  });
+});
+

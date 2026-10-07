@@ -1,12 +1,15 @@
 import { useEffect } from 'react';
 import { redo, save, saveAll, undo } from './actions';
 import { Browser } from './components/Browser';
+import { CenterTabs } from './components/CenterTabs';
 import { ExecutionPanel } from './components/ExecutionPanel';
 import { Inspector } from './components/Inspector';
 import { Splitter, useStoredSize } from './components/Splitter';
 import { TreeEditor } from './components/TreeEditor';
 import { DialogHost, useDialog } from './dialogs';
 import { useAnalysis } from './hooks';
+import { defaultRosbridgeUrl, followExecution } from './ros';
+import { useSettings } from './settings';
 import { hasDirtyFiles, useStore } from './store';
 
 function Toasts() {
@@ -32,6 +35,17 @@ export function App() {
   useEffect(() => {
     void useStore.getState().load();
   }, []);
+
+  // Every run of the server, whoever started it, for the Execution tab.
+  const rosbridgeUrl = useSettings((s) => s.rosbridgeUrl.trim()) || defaultRosbridgeUrl();
+  const executionTopic = useSettings((s) => s.executionTopic.trim());
+  useEffect(() => {
+    if (!executionTopic) return;
+    const follow = followExecution({
+      url: rosbridgeUrl, topic: executionTopic, onMessage: (message) => useStore.getState().applySnapshot(message),
+    });
+    return () => follow.close();
+  }, [rosbridgeUrl, executionTopic]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -89,9 +103,12 @@ export function App() {
     }}>
       <Browser analysis={analysis} />
       <Splitter direction="columns" label="Resize the workspace panel" value={left} onChange={setLeft} grow={1} min={SIDE_MIN} max={640} />
-      {loading && !Object.keys(useStore.getState().files).length
-        ? <main className="panel placeholder">Loading…</main>
-        : executionShown ? <ExecutionPanel analysis={analysis} /> : <TreeEditor analysis={analysis} />}
+      <div className="center">
+        <CenterTabs />
+        {loading && !Object.keys(useStore.getState().files).length
+          ? <main className="panel placeholder">Loading…</main>
+          : executionShown ? <ExecutionPanel analysis={analysis} /> : <TreeEditor analysis={analysis} />}
+      </div>
       <Splitter direction="columns" label="Resize the details panel" value={right} onChange={setRight} grow={-1} min={SIDE_MIN} max={720} />
       <Inspector analysis={analysis} />
       <DialogHost />

@@ -11,7 +11,7 @@
 import type { StateCreator } from 'zustand';
 import type { NativeResult } from '../../server/native';
 import type { BTDocument, BTNode, NodeModel, ParseError } from '../../shared/types';
-import type { ExecutedTree, ExecutionStatus, NodeProgress } from '../execution';
+import type { ExecutedTree, ExecutionSnapshot, ExecutionStatus, NodeProgress } from '../execution';
 import type { RunResult } from '../ros';
 
 export interface FileState {
@@ -155,10 +155,16 @@ export interface UiSlice {
   resetUi(): void;
 }
 
-/** A tree run on the server, from the Run dialog. */
+/** A tree run on the server: from the Run dialog, or started elsewhere and followed. */
 export interface Execution {
   /** The ID of the tree run. */
   treeId: string;
+  /** Whether this editor started it, from the Run dialog: it can stop it. */
+  own: boolean;
+  /** The number the server gives the run, once it said. */
+  run?: number;
+  /** Whether the statuses come from the server's snapshots of the run, rather than from the feedback. */
+  followed?: boolean;
   /** Running, or how it ended. */
   result?: RunResult;
   /** The tree as the server executes it; undefined until it says, or if it never does. */
@@ -177,12 +183,16 @@ export interface Execution {
 
 export interface ExecutionSlice {
   execution?: Execution;
-  /** Whether the execution is shown in place of the tree editor. */
+  /** The last snapshot of a run received, for the run that this editor starts: its number comes later. */
+  lastSnapshot?: ExecutionSnapshot;
+  /** Whether the Execution tab is shown, rather than the Editor tab. */
   executionShown: boolean;
 
   startExecution(treeId: string): void;
   /** Apply a feedback message of the server: statuses, or plain text. */
   applyFeedback(message: string): void;
+  /** Apply a message of the topic of the runs, see parseSnapshot(). */
+  applySnapshot(message: string): void;
   endExecution(result: RunResult): void;
   showExecution(shown: boolean): void;
 }

@@ -1,5 +1,6 @@
 // Runs a tree on a BehaviorTree.ROS2 server (a TreeExecutionServer), through
-// rosbridge: a WebSocket that speaks JSON, so the browser needs no ROS.
+// rosbridge: a WebSocket that speaks JSON, so the browser needs no ROS. Also
+// follows every run of the server, see followExecution().
 //
 //   → send_action_goal    the tree ID and the payload
 //   ← action_feedback     the messages of the server while the tree runs
@@ -103,6 +104,61 @@ export function runTree(options: {
       if (socket?.readyState === WebSocket.OPEN) {
         socket.send(JSON.stringify({ op: 'cancel_action_goal', id, action: options.action }));
       }
+    },
+  };
+}
+
+/** How long to wait before connecting again, after the connection closed or failed. */
+export const FOLLOW_RETRY_MS = 3000;
+
+/**
+ * Follows the runs of the server, whoever starts them: subscribes to the
+ * latched topic on which StepIt Commander publishes the whole run, and calls
+ * onMessage with each message. rosbridge subscribes with the durability of the
+ * publisher, so the last run comes at once. A connection that fails or closes
+ * is opened again, every FOLLOW_RETRY_MS, until close().
+ *
+ *   → subscribe   the topic, std_msgs/String
+ *   ← publish     the run, as JSON
+ */
+export function followExecution(options: { url: string; topic: string; onMessage(message: string): void }): { close(): void } {
+  let socket: WebSocket | undefined;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let closed = false;
+
+  const connect = () => {
+    timer = undefined;
+    try {
+      socket = new WebSocket(options.url);
+    } catch {
+      return; // An invalid URL: nothing to follow until it changes.
+    }
+    const current = socket;
+    current.onopen = () => current.send(JSON.stringify({
+      op: 'subscribe', id: `behavior-editor-follow-${nextId++}`, topic: options.topic, type: 'std_msgs/msg/String',
+    }));
+    current.onmessage = (event) => {
+      let msg: { op?: string; topic?: string; msg?: { data?: unknown } };
+      try {
+        msg = JSON.parse(String(event.data));
+      } catch {
+        return;
+      }
+      if (msg.op === 'publish' && msg.topic === options.topic && typeof msg.msg?.data === 'string') {
+        options.onMessage(msg.msg.data);
+      }
+    };
+    current.onclose = () => {
+      if (!closed && socket === current && !timer) timer = setTimeout(connect, FOLLOW_RETRY_MS);
+    };
+  };
+
+  connect();
+  return {
+    close() {
+      closed = true;
+      if (timer) clearTimeout(timer);
+      socket?.close();
     },
   };
 }

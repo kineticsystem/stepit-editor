@@ -1,7 +1,9 @@
-// The center panel while a tree runs on the server, in place of the tree
-// editor: the tree as the server executes it, subtrees included, with the last
-// status of each node, and the progress of a running node that reports one. It
-// looks like the tree editor, read-only.
+// The Execution tab of the center panel: the run of the server, whoever
+// started it, from the Run dialog of this editor or elsewhere, e.g. StepIt UI:
+// the tree as the server executes it, subtrees included, with the last status
+// of each node, and the progress of a running node that reports one. It looks
+// like the tree editor, read-only. Only a run of this editor can be stopped
+// here.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { BTNode } from '../../shared/types';
@@ -84,7 +86,15 @@ export function ExecutionPanel({ analysis }: { analysis: Analysis }) {
     container.current?.querySelector(`[data-key="${CSS.escape(running)}"]`)?.scrollIntoView({ block: 'nearest' });
   }, [running]);
 
-  if (!execution) return null;
+  if (!execution) {
+    return (
+      <main className="panel editor execution">
+        <div className="placeholder">
+          Nothing has run yet. A tree run from here, or started elsewhere, e.g. from StepIt UI, shows here.
+        </div>
+      </main>
+    );
+  }
 
   const toggle = (row: ExecutionRow) => {
     const next = new Set(collapsed);
@@ -109,24 +119,19 @@ export function ExecutionPanel({ analysis }: { analysis: Analysis }) {
   return (
     <main className="panel editor execution">
       <header className="panel-header editor-header">
-        <button className="icon-button" title="Back to the editor" aria-label="Back to the editor"
-          onClick={() => useStore.getState().showExecution(false)}>
-          <Icon name="back" size={15} />
-        </button>
         <div className="breadcrumb">
-          <span className="muted">Execution</span>
-          <span className="muted">›</span>
           <b>{execution.treeId}</b>
         </div>
         <RunState execution={execution} />
+        {!execution.own && (
+          <span className="muted small" title="Run by another client of the server, e.g. StepIt UI or the gamepad">
+            started elsewhere
+          </span>
+        )}
         <span className="row-spacer" />
-        {!execution.result ? (
+        {execution.own && !execution.result && (
           <button className="danger" onClick={stopRun} title="Ask the server to stop the tree">
             <Icon name="close" size={14} /> Stop
-          </button>
-        ) : (
-          <button onClick={() => useStore.getState().showExecution(false)}>
-            <Icon name="tree" size={14} /> Back to the editor
           </button>
         )}
       </header>

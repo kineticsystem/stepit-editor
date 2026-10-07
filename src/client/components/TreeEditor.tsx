@@ -86,7 +86,8 @@ export function TreeEditor({ analysis }: { analysis: Analysis }) {
   const file = useStore((s) => (selection.file ? s.files[selection.file] : undefined));
   const clipboard = useStore((s) => s.clipboard);
   const execution = useStore((s) => s.execution);
-  const running = !!execution && !execution.result;
+  // A run of this editor; one started elsewhere is replaced by a new one, as the server preempts it.
+  const running = !!execution && execution.own && !execution.result;
   const [view, setView] = useState<'tree' | 'xml'>('tree');
   const [problemsOpen, setProblemsOpen] = useState(true);
   const [problemsHeight, setProblemsHeight] = useStoredSize('be.problems', 220);
@@ -136,13 +137,6 @@ export function TreeEditor({ analysis }: { analysis: Analysis }) {
               <button role="tab" aria-selected={showXml} className={showXml ? 'active' : ''}
                 onClick={() => setView('xml')}><Icon name="code" size={14} /> XML</button>
             </div>
-            {execution && (
-              <button className={`run-button ${execution.result ? '' : 'running'}`}
-                title={`${execution.treeId}: ${execution.result ? 'show how the last run went' : 'running, show its execution'}`}
-                onClick={() => useStore.getState().showExecution(true)}>
-                <Icon name="tree" size={14} /> {execution.result ? 'Last run' : `Running ${execution.treeId}`}
-              </button>
-            )}
             {tree?.id && (
               <button className="run-button"
                 title={!isObjective(file.doc, tree.id)

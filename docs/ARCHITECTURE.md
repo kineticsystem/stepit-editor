@@ -361,6 +361,7 @@ The screen is laid out in [`App.tsx`](../src/client/App.tsx), which also handles
 | Component | Panel | Responsibility |
 |---|---|---|
 | [`Browser`](../src/client/components/Browser.tsx) | Left | Two tabs: **Trees**, the objectives and the subtrees, each tree by its ID and never its file, except an empty or unreadable file; **Nodes**, the custom node types and the built-in nodes. Create and delete files; open another folder. The tab shown is a setting, `browserTab`. |
+| [`CenterTabs`](../src/client/components/CenterTabs.tsx) | Center | The tabs of the center panel: **Editor**, the `TreeEditor`, and **Execution**, the `ExecutionPanel`, which shows the name of the run, with a dot while it runs. |
 | [`TreeEditor`](../src/client/components/TreeEditor.tsx) | Center | The header, the toolbar, the tree or XML view, and the problems list. |
 | [`TreeView`](../src/client/components/TreeView.tsx) | Center | The tree as an indented list: selection, keyboard navigation, drag and drop, SubTrees expanded read-only. |
 | [`XmlView`](../src/client/components/XmlView.tsx) | Center | The XML that will be written, read-only. |
@@ -368,14 +369,16 @@ The screen is laid out in [`App.tsx`](../src/client/App.tsx), which also handles
 | [`Inspector`](../src/client/components/Inspector.tsx) | Right | The details of the selection: a node's ports and scripts, a tree's ID and interface, or a node type and where it is used. |
 | [`AddNodeDialog`](../src/client/components/AddNodeDialog.tsx) | Dialog | The palette to add a node or a SubTree, wrap the selection, or declare a new node type. |
 | [`RunDialog`](../src/client/components/RunDialog.tsx) | Dialog | The payload of a tree, before running it on the robot. |
-| [`ExecutionPanel`](../src/client/components/ExecutionPanel.tsx) | Center | A running tree, in place of the tree editor: the status of each node, and what failed. |
+| [`ExecutionPanel`](../src/client/components/ExecutionPanel.tsx) | Center | The run of the server, of this editor or started elsewhere: the status of each node, and what failed; Stop for a run of this editor. |
 | [`Ports`](../src/client/components/Ports.tsx) | Shared | The ports of a node type, as shown by the details panel and by a file of node models. |
 
 Dialogs are opened from anywhere with the promise-based helpers of [`dialogs.tsx`](../src/client/dialogs.tsx), e.g. `await confirm(...)` or `await choose(...)`, and rendered by a single `DialogHost`.
 
 ### Running a Tree
 
-The Run dialog saves the files, then [`src/client/ros.ts`](../src/client/ros.ts) opens a WebSocket to rosbridge and sends an `ExecuteTree` action goal to the BehaviorTree.ROS2 server with the tree ID and a YAML payload. The center panel then shows the execution ([`ExecutionPanel`](../src/client/components/ExecutionPanel.tsx)): the tree as the server runs it, with the status of each node that StepIt Commander reports in the feedback of the action ([`execution.ts`](../src/client/execution.ts)), and the result at the end. The editor needs no ROS installation: rosbridge speaks JSON.
+The Run dialog saves the files, then [`src/client/ros.ts`](../src/client/ros.ts) opens a WebSocket to rosbridge and sends an `ExecuteTree` action goal to the BehaviorTree.ROS2 server with the tree ID and a YAML payload. The Execution tab then shows the run ([`ExecutionPanel`](../src/client/components/ExecutionPanel.tsx)): the tree as the server runs it, with the status of each node, and the result at the end. The editor needs no ROS installation: rosbridge speaks JSON.
+
+**The statuses come from two sources** ([`execution.ts`](../src/client/execution.ts), [`store/execution.ts`](../src/client/store/execution.ts)). The feedback of the goal reaches only the client that sent it, and after its first message tells only what changed. So StepIt Commander also publishes the whole run, every node with its last status, on the latched topic `/stepit_server/execution`, which the editor follows from the moment it loads (`followExecution`, connecting again every 3 s when rosbridge goes away). A run of this editor is told apart on the topic by its number, which the first feedback message carries; from its first snapshot on, the snapshots give its statuses, so that a run looks the same whoever started it, and the feedback serves a server that publishes no run. A run started elsewhere shows once no run of this editor is running: it never replaces one. The goal's result, not the topic, ends a run of this editor, since only the goal tells a run that rosbridge could not even start.
 
 ## The Command Line Validator
 

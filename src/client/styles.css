@@ -178,6 +178,25 @@ textarea { resize: vertical; }
 
 .placeholder { margin: auto; padding: 24px; color: var(--muted); text-align: center; }
 
+/* The center panel: its tabs, the Editor and the Execution, above it. */
+.center { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.center > .panel { flex: 1; }
+.center-tabs {
+  display: flex; flex: none; gap: 2px; padding: 4px 8px 0;
+  background: var(--panel-2); border-bottom: 1px solid var(--border);
+}
+.center-tabs button {
+  display: inline-flex; align-items: center; gap: 6px; min-width: 0;
+  border: 1px solid transparent; border-bottom: 0; border-radius: 6px 6px 0 0;
+  padding: 5px 12px; margin-bottom: -1px; background: none; color: var(--muted);
+}
+.center-tabs button.active { background: var(--panel); border-color: var(--border); color: inherit; font-weight: 600; }
+.center-tab-run {
+  display: inline-flex; align-items: center; gap: 5px; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 400; color: var(--muted);
+}
+.center-tab-run.running { color: var(--accent); }
+
 /* Browser */
 
 .root-path {
