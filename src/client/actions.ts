@@ -11,8 +11,9 @@ import {
 import type { BehaviorTreeDef, BTDocument, BTNode, NodeModel, NodeTypeCategory } from '../shared/types';
 import { categoryOf, type Workspace } from '../shared/workspace';
 import { newTree as createTree, trees } from '../shared/xml';
+import { errorMessage } from './api';
 import { choose } from './dialogs';
-import { type Run, runTree } from './ros';
+import { cancelAllGoals, type Run, runTree } from './ros';
 import { hasDirtyFiles, isDirty, type SaveResult, useStore } from './store';
 
 function current() {
@@ -308,9 +309,19 @@ export function startRun(options: { url: string; action: string; treeId: string;
   });
 }
 
-/** Asks the server to stop the run in progress; it then ends as stopped. */
-export function stopRun() {
-  currentRun?.cancel();
+/**
+ * Asks the server to stop the run in progress; it then ends as stopped. A run
+ * of this editor is stopped by cancelling its goal; a run started elsewhere,
+ * e.g. from StepIt UI, by cancelling every goal of the server, as StepIt UI's
+ * Stop does.
+ */
+export function stopRun(connection: { url: string; action: string }) {
+  if (currentRun) {
+    currentRun.cancel();
+    return;
+  }
+  cancelAllGoals(connection)
+    .catch((e: unknown) => useStore.getState().toast(`Could not stop the run: ${errorMessage(e)}`, 'error'));
 }
 
 export function undo() {

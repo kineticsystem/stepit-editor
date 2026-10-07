@@ -2,8 +2,8 @@
 // started it, from the Run dialog of this editor or elsewhere, e.g. StepIt UI:
 // the tree as the server executes it, subtrees included, with the last status
 // of each node, and the progress of a running node that reports one. It looks
-// like the tree editor, read-only. Only a run of this editor can be stopped
-// here.
+// like the tree editor, read-only. Stop stops any run: a run of this editor by
+// cancelling its goal, a run started elsewhere by cancelling every goal.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { BTNode } from '../../shared/types';
@@ -14,6 +14,8 @@ import {
   outcomeLabel, progressFraction, progressLabel,
 } from '../execution';
 import type { Analysis } from '../hooks';
+import { defaultRosbridgeUrl } from '../ros';
+import { useSettings } from '../settings';
 import { type Execution, useStore } from '../store';
 import { Icon } from './icons';
 import { attrsTooltip, NodeLabel } from './NodeLabel';
@@ -66,6 +68,8 @@ function StatusCell({ status }: { status?: ExecutionStatus }) {
 
 export function ExecutionPanel({ analysis }: { analysis: Analysis }) {
   const execution = useStore((s) => s.execution);
+  const rosbridgeUrl = useSettings((s) => s.rosbridgeUrl.trim()) || defaultRosbridgeUrl();
+  const runAction = useSettings((s) => s.runAction.trim());
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const container = useRef<HTMLDivElement>(null);
   const { ws } = analysis;
@@ -129,8 +133,9 @@ export function ExecutionPanel({ analysis }: { analysis: Analysis }) {
           </span>
         )}
         <span className="row-spacer" />
-        {execution.own && !execution.result && (
-          <button className="danger" onClick={stopRun} title="Ask the server to stop the tree">
+        {!execution.result && (
+          <button className="danger" onClick={() => stopRun({ url: rosbridgeUrl, action: runAction })}
+            title={execution.own ? 'Ask the server to stop the tree' : 'Ask the server to stop this run, though it was started elsewhere'}>
             <Icon name="close" size={14} /> Stop
           </button>
         )}

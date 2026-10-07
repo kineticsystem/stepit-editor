@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { EXECUTE_TREE, FOLLOW_RETRY_MS, followExecution, runTree } from '../src/client/ros';
+import { cancelAllGoals, EXECUTE_TREE, FOLLOW_RETRY_MS, followExecution, REQUEST_TIMEOUT_MS, runTree } from '../src/client/ros';
 
 /** A WebSocket that records what is sent, and lets the test answer. */
 class FakeSocket {
@@ -117,6 +117,49 @@ describe('following the runs of the server', () => {
     second.onclose?.();
     vi.advanceTimersByTime(FOLLOW_RETRY_MS * 2);
     expect(FakeSocket.last).toBe(second);
+  });
+});
+
+describe('stopping a run started elsewhere', () => {
+  beforeEach(() => {
+    vi.stubGlobal('WebSocket', FakeSocket);
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  const cancel = () => cancelAllGoals({ url: 'ws://robot:9090', action: '/commander/execute_objective' });
+
+  it('cancels every goal of the server, and resolves when it answered', async () => {
+    const done = cancel();
+    const socket = FakeSocket.last;
+    socket.open();
+    const [request] = socket.sent;
+    expect(request).toMatchObject({
+      op: 'call_service', service: '/commander/execute_objective/_action/cancel_goal', type: 'action_msgs/srv/CancelGoal', args: {},
+    });
+    socket.receive({ op: 'service_response', id: 'someone else', result: false });
+    socket.receive({ op: 'service_response', id: request.id, result: true, values: { return_code: 0 } });
+    await expect(done).resolves.toBeUndefined();
+    expect(socket.readyState).toBe(3);
+  });
+
+  it('says why it could not', async () => {
+    const refused = cancel();
+    FakeSocket.last.open();
+    FakeSocket.last.receive({ op: 'service_response', id: FakeSocket.last.sent[0].id, result: false, values: 'no such service' });
+    await expect(refused).rejects.toThrow('The server refused to stop: no such service');
+
+    const unanswered = cancel();
+    FakeSocket.last.open();
+    vi.advanceTimersByTime(REQUEST_TIMEOUT_MS);
+    await expect(unanswered).rejects.toThrow('did not answer');
+
+    const unreachable = cancel();
+    FakeSocket.last.onerror?.();
+    await expect(unreachable).rejects.toThrow('Cannot connect to rosbridge');
   });
 });
 

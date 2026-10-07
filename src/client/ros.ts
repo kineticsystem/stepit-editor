@@ -6,6 +6,8 @@
 //   ← action_feedback     the messages of the server while the tree runs
 //   ← action_result       how it ended; result: false when rosbridge failed
 //   → cancel_action_goal  stops it
+//
+// A run started elsewhere, by another client, is stopped with cancelAllGoals().
 
 import { errorMessage } from './api';
 
@@ -106,6 +108,57 @@ export function runTree(options: {
       }
     },
   };
+}
+
+/** How long to wait for the server to answer a request, in milliseconds. */
+export const REQUEST_TIMEOUT_MS = 5000;
+
+/**
+ * Stops whatever the server runs, whoever started it: calls the cancel_goal
+ * service of the action with an empty request, which cancels every goal. Every
+ * BehaviorTree.ROS2 server has it, as every ROS 2 action server does.
+ * Resolves once the server answered; rejects with why it could not.
+ *
+ *   → call_service      <action>/_action/cancel_goal, action_msgs/srv/CancelGoal
+ *   ← service_response
+ */
+export function cancelAllGoals(options: { url: string; action: string }): Promise<void> {
+  const id = `behavior-editor-cancel-${Date.now()}-${nextId++}`;
+  return new Promise<void>((resolve, reject) => {
+    let socket: WebSocket;
+    try {
+      socket = new WebSocket(options.url);
+    } catch (e) {
+      reject(new Error(`Invalid rosbridge URL ${options.url}: ${errorMessage(e)}`));
+      return;
+    }
+    let done = false;
+    const finish = (error?: string) => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      socket.close();
+      if (error) reject(new Error(error));
+      else resolve();
+    };
+    const timer = setTimeout(() => finish('The server did not answer the request to stop.'), REQUEST_TIMEOUT_MS);
+    socket.onopen = () => socket.send(JSON.stringify({
+      op: 'call_service', id, service: `${options.action}/_action/cancel_goal`, type: 'action_msgs/srv/CancelGoal', args: {},
+    }));
+    socket.onerror = () => finish(`Cannot connect to rosbridge at ${options.url}.`);
+    socket.onclose = () => finish('The connection to rosbridge closed before the server answered.');
+    socket.onmessage = (event) => {
+      let msg: { op?: string; id?: string; result?: boolean; values?: unknown };
+      try {
+        msg = JSON.parse(String(event.data));
+      } catch {
+        return;
+      }
+      if (msg.op === 'service_response' && msg.id === id) {
+        finish(msg.result === false ? `The server refused to stop: ${String(msg.values)}` : undefined);
+      }
+    };
+  });
 }
 
 /** How long to wait before connecting again, after the connection closed or failed. */
