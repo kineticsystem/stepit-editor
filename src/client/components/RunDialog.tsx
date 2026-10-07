@@ -1,6 +1,6 @@
 // Runs the open tree on a BehaviorTree.ROS2 server, through rosbridge: a form
 // for the payload the tree reads and the connection. Running saves the files,
-// closes the dialog and shows the execution in place of the tree editor.
+// closes the dialog and shows the run in the Execution tab.
 
 import { useState } from 'react';
 import { payloadHints, payloadKeys, payloadText, type PayloadHint } from '../../shared/payload';
@@ -68,6 +68,12 @@ function RunForm({ treeId, keys, hints, close }: {
             <input className="mono" value={settings.runAction} spellCheck={false}
               onChange={(e) => settings.update({ runAction: e.target.value })} />
             <small>The ExecuteTree action of the server; BehaviorTree.ROS2's default is bt_execution.</small>
+          </label>
+          <label className="field">
+            <span>Runs topic</span>
+            <input className="mono" value={settings.executionTopic} spellCheck={false}
+              onChange={(e) => settings.update({ executionTopic: e.target.value })} />
+            <small>Where StepIt Commander publishes every run, for the Execution tab, whoever started it; empty to follow only the runs started here.</small>
           </label>
         </fieldset>
       </details>

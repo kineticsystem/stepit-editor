@@ -11,6 +11,10 @@
 // HALTED for a node stopped while running, e.g. by a reactive parent.
 // `progress`, only when one changed, is how far some running nodes are, by
 // _uid: those whose behavior reports it, done out of total in a unit of its own.
+// `run`, in the first message, is the number the server gives the run.
+//
+// StepIt Commander also publishes the whole run on a latched topic, for every
+// client, whoever sent the goal: see parseSnapshot().
 
 import { isDisabled } from '../shared/treeOps';
 import type { BehaviorTreeDef, BTNode } from '../shared/types';
@@ -28,6 +32,8 @@ export interface NodeProgress {
 }
 
 export interface ExecutionFeedback {
+  /** The number of the run, in the first message. */
+  run?: number;
   tree?: string;
   nodes: Record<string, ExecutionStatus>;
   progress?: Record<string, NodeProgress>;
@@ -54,13 +60,64 @@ export function parseFeedback(message: string): ExecutionFeedback | undefined {
     return undefined;
   }
   if (typeof data !== 'object' || data === null) return undefined;
-  const { tree, nodes, progress } = data as { tree?: unknown; nodes?: unknown; progress?: unknown };
+  const { run, tree, nodes, progress } = data as { run?: unknown; tree?: unknown; nodes?: unknown; progress?: unknown };
   if (typeof nodes !== 'object' || nodes === null || (tree !== undefined && typeof tree !== 'string')) return undefined;
+  return {
+    run: typeof run === 'number' ? run : undefined,
+    tree: tree as string | undefined,
+    nodes: parseStatuses(nodes),
+    progress: parseProgress(progress),
+  };
+}
+
+function parseStatuses(nodes: object): Record<string, ExecutionStatus> {
   const out: Record<string, ExecutionStatus> = {};
   for (const [uid, status] of Object.entries(nodes)) {
     if (typeof status === 'string' && STATUSES.has(status)) out[uid] = status as ExecutionStatus;
   }
-  return { tree: tree as string | undefined, nodes: out, progress: parseProgress(progress) };
+  return out;
+}
+
+/**
+ * The whole run, as StepIt Commander publishes it on its latched topic
+ * ~/execution, whenever it changes and once more when it ends:
+ *
+ *   {"run": 7, "objective": "Main", "tree": "<root>...</root>",
+ *    "nodes": {"1": "RUNNING"}, "progress": {...}, "running": true}
+ *
+ * `nodes` holds every node that has run. A run that ended has `running` false,
+ * `status`, how the tree ended, `cancelled` and `message`.
+ */
+export interface ExecutionSnapshot {
+  run: number;
+  objective: string;
+  tree: string;
+  nodes: Record<string, ExecutionStatus>;
+  progress: Record<string, NodeProgress>;
+  /** How it ended, once it did. */
+  result?: RunResult;
+}
+
+/** The snapshot of a message of the topic, or undefined for anything else. */
+export function parseSnapshot(message: string): ExecutionSnapshot | undefined {
+  let data: unknown;
+  try {
+    data = JSON.parse(message);
+  } catch {
+    return undefined;
+  }
+  if (typeof data !== 'object' || data === null) return undefined;
+  const { run, objective, tree, nodes, progress, running, status, cancelled, message: text } = data as Record<string, unknown>;
+  if (typeof run !== 'number' || typeof objective !== 'string' || typeof tree !== 'string'
+    || typeof nodes !== 'object' || nodes === null || typeof running !== 'boolean') return undefined;
+  let result: RunResult | undefined;
+  if (!running) {
+    // As the goal ends: canceled, or succeeded when the tree did, or aborted.
+    const treeStatus = typeof status === 'string' ? status : undefined;
+    const outcome = cancelled === true ? 'canceled' : treeStatus === 'SUCCESS' ? 'succeeded' : 'aborted';
+    result = { ok: outcome === 'succeeded', outcome, treeStatus, message: typeof text === 'string' ? text : '' };
+  }
+  return { run, objective, tree, nodes: parseStatuses(nodes), progress: parseProgress(progress) ?? {}, result };
 }
 
 /** The fraction done, from 0 to 1. */

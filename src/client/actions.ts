@@ -292,7 +292,7 @@ let currentRun: Run | undefined;
 
 /**
  * Runs a tree on the server, through rosbridge, and shows its execution in
- * place of the tree editor. The files must be saved first: the server runs
+ * the Execution tab. The files must be saved first: the server runs
  * them as they are on disk.
  */
 export function startRun(options: { url: string; action: string; treeId: string; payload: string }) {

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  executionKey, executionRows, failedNodeUid, failureCauses, outcomeLabel, parseExecutedTree, parseFeedback, progressLabel,
+  executionKey, executionRows, failedNodeUid, failureCauses, outcomeLabel, parseExecutedTree, parseFeedback, parseSnapshot,
+  progressLabel,
 } from '../src/client/execution';
 
 vi.mock('../src/client/api', async (original) => {
@@ -131,7 +132,7 @@ describe('progressLabel', () => {
 
 describe('the execution in the store', () => {
   const s = () => useStore.getState();
-  beforeEach(() => useStore.setState({ execution: undefined, executionShown: false, toasts: [] }));
+  beforeEach(() => useStore.setState({ execution: undefined, lastSnapshot: undefined, executionShown: false, toasts: [] }));
 
   it('shows the execution when a run starts, and gathers the statuses', () => {
     s().startExecution('Main');
@@ -175,5 +176,97 @@ describe('the execution in the store', () => {
     s().applyFeedback(JSON.stringify({ nodes: { 1: 'SUCCESS' } }));
     expect(s().execution?.statuses).toEqual({});
     expect(s().toasts.at(-1)?.message).toBe('Main: stopped');
+  });
+});
+
+/** A message of the topic of the runs, as StepIt Commander publishes it. */
+const snapshot = (run: number, nodes: Record<string, string>, ending?: Record<string, unknown>) => JSON.stringify({
+  run, objective: 'Main', tree: EXECUTED, nodes, progress: {}, running: !ending, ...ending,
+});
+
+describe('parseSnapshot', () => {
+  it('reads a run in progress', () => {
+    expect(parseSnapshot(snapshot(7, { 1: 'RUNNING' }))).toMatchObject({
+      run: 7, objective: 'Main', nodes: { 1: 'RUNNING' }, progress: {}, result: undefined,
+    });
+  });
+
+  it('reads how a run ended, as its goal would', () => {
+    expect(parseSnapshot(snapshot(7, {}, { status: 'SUCCESS', cancelled: false, message: '' }))?.result)
+      .toEqual({ ok: true, outcome: 'succeeded', treeStatus: 'SUCCESS', message: '' });
+    const preempted = parseSnapshot(snapshot(7, {}, { status: 'FAILURE', cancelled: false, message: "Preempted by objective 'B'" }));
+    expect(preempted?.result).toEqual({ ok: false, outcome: 'aborted', treeStatus: 'FAILURE', message: "Preempted by objective 'B'" });
+    expect(outcomeLabel(preempted!.result!)).toBe('Failed');
+    expect(parseSnapshot(snapshot(7, {}, { status: 'FAILURE', cancelled: true, message: '' }))?.result?.outcome).toBe('canceled');
+  });
+
+  it('refuses anything else, e.g. a feedback message', () => {
+    expect(parseSnapshot(JSON.stringify({ tree: EXECUTED, nodes: {} }))).toBeUndefined();
+    expect(parseSnapshot('not JSON')).toBeUndefined();
+  });
+
+  it('leaves the number of the run in the first feedback message', () => {
+    expect(parseFeedback(JSON.stringify({ run: 7, tree: EXECUTED, nodes: {} }))?.run).toBe(7);
+    expect(parseFeedback(JSON.stringify({ nodes: {} }))?.run).toBeUndefined();
+  });
+});
+
+describe('following the runs of the server', () => {
+  const s = () => useStore.getState();
+  beforeEach(() => useStore.setState({ execution: undefined, lastSnapshot: undefined, executionShown: false, toasts: [] }));
+
+  it('shows a run started elsewhere, without leaving the editor', () => {
+    s().applySnapshot(snapshot(3, { 1: 'RUNNING', 2: 'SUCCESS' }));
+    expect(s().executionShown).toBe(false);
+    expect(s().execution).toMatchObject({ treeId: 'Main', own: false, run: 3, statuses: { 1: 'RUNNING', 2: 'SUCCESS' } });
+    expect(s().execution?.tree?.root.id).toBe('Main');
+
+    s().applySnapshot(snapshot(3, { 1: 'SUCCESS', 2: 'SUCCESS' }, { status: 'SUCCESS', cancelled: false, message: '' }));
+    expect(s().execution?.result?.ok).toBe(true);
+    expect(s().execution?.endedAt).toBeDefined();
+  });
+
+  it('takes the next run in place of the last', () => {
+    s().applySnapshot(snapshot(3, { 1: 'SUCCESS' }, { status: 'SUCCESS', cancelled: false, message: '' }));
+    s().applySnapshot(snapshot(4, { 1: 'RUNNING' }));
+    expect(s().execution).toMatchObject({ run: 4, statuses: { 1: 'RUNNING' }, result: undefined });
+  });
+
+  it('follows its own run on the topic, once the feedback gave its number', () => {
+    s().startExecution('Main');
+    // The last run, latched, then this run's first snapshot, before the feedback says which is ours.
+    s().applySnapshot(snapshot(3, { 1: 'SUCCESS' }, { status: 'SUCCESS', cancelled: false, message: '' }));
+    s().applySnapshot(snapshot(4, { 1: 'RUNNING' }));
+    expect(s().execution).toMatchObject({ own: true, statuses: {} });
+
+    s().applyFeedback(JSON.stringify({ run: 4, tree: EXECUTED, nodes: { 1: 'RUNNING' } }));
+    expect(s().execution).toMatchObject({ own: true, run: 4, followed: true, statuses: { 1: 'RUNNING' } });
+
+    // From now on the topic says it all; the feedback is not needed.
+    s().applySnapshot(snapshot(4, { 1: 'RUNNING', 2: 'SUCCESS' }));
+    s().applyFeedback(JSON.stringify({ nodes: { 4: 'FAILURE' } }));
+    expect(s().execution?.statuses).toEqual({ 1: 'RUNNING', 2: 'SUCCESS' });
+  });
+
+  it('keeps its own run until it ends, then shows the run that replaced it', () => {
+    s().startExecution('Main');
+    s().applyFeedback(JSON.stringify({ run: 4, tree: EXECUTED, nodes: { 1: 'RUNNING' } }));
+    s().applySnapshot(snapshot(5, { 1: 'RUNNING' }));
+    expect(s().execution).toMatchObject({ own: true, run: 4 });
+
+    s().endExecution({ ok: false, outcome: 'aborted', treeStatus: 'FAILURE', message: "Preempted by objective 'Main'" });
+    s().applySnapshot(snapshot(4, { 1: 'HALTED' }, { status: 'FAILURE', cancelled: false, message: "Preempted by objective 'Main'" }));
+    expect(s().execution).toMatchObject({ own: true, run: 4, statuses: { 1: 'HALTED' } });
+    expect(s().execution?.result?.outcome).toBe('aborted');
+
+    s().applySnapshot(snapshot(5, { 1: 'RUNNING', 2: 'SUCCESS' }));
+    expect(s().execution).toMatchObject({ own: false, run: 5 });
+  });
+
+  it('falls back on the feedback for a server that publishes no run', () => {
+    s().startExecution('Main');
+    s().applyFeedback(JSON.stringify({ tree: EXECUTED, nodes: { 1: 'RUNNING' } }));
+    expect(s().execution?.followed).toBeFalsy();
+    expect(s().execution?.statuses).toEqual({ 1: 'RUNNING' });
   });
 });
