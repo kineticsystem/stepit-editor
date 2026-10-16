@@ -58,7 +58,7 @@ vitest, in `tests/`, one file per part, with `tests/fakeServer.ts` for rosbridge
 For the `architect` and `reviewer` skills: what they cannot find out alone.
 
 - `docs/ARCHITECTURE.md` follows the one idea above. Its sections, in order: Introduction, The Big Picture, The Layers, The Shared Core, The Server, The Native Validator, The Client, The Command Line Validator, Tests, How to Extend the Editor, Design Decisions and Trade-offs.
-- **The review is the last section, Review, of `docs/ARCHITECTURE.md`**, opened with the date and the commit reviewed, as in every StepIt module; not a separate `docs/Review.md`. Say whether an issue can lose a user's file.
+- **The review is a separate document, `docs/Review.md`**, opened with the date and the commit reviewed; `docs/ARCHITECTURE.md` describes the design and holds no review. Say whether an issue can lose a user's file.
 - The first things to check: an import into `src/shared` of anything outside it, of a `node:` module or of React; client code that imports server code rather than types; a round trip of the XML that loses something.
 - **Probes**: a throwaway test is a vitest file in `tests/`, run with `pnpm exec vitest run tests/<file>`, in the container when it needs the native validator.
 
