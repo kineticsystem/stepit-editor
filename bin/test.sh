@@ -6,3 +6,4 @@ cd "$(dirname "$(readlink -f "$0")")/.."
 
 pnpm run typecheck
 pnpm run test
+bin/check-diagrams.sh

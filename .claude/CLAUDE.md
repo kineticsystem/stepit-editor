@@ -66,3 +66,4 @@ For the `architect` and `reviewer` skills: what they cannot find out alone.
 
 - TypeScript strict; `pnpm run typecheck` must pass.
 - Update the README (its HTTP API, its validation rules) and `docs/ARCHITECTURE.md` when the interface or a layer changes.
+- Diagrams follow the `beautiful-mermaid-diagrams` skill. Each is an image: its source is `docs/diagrams/<name>.mmd`, rendered by `bin/render-diagrams.sh` into an SVG beside it (it needs Node.js and Chrome); commit both. `bin/check-diagrams.sh`, run by `bin/test.sh` and CI, fails when an SVG is older than its source.

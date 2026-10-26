@@ -36,40 +36,8 @@ It follows one idea: **the XML files are the truth**. The editor reads them into
 
 The editor is a single-page React application served by a small Node.js server. The server owns the folder of behaviors on disk; the browser holds everything else: the parsed files, the unsaved edits, the undo history and the checks.
 
-```mermaid
----
-config:
-  theme: base
-  themeVariables:
-    primaryColor: "#3b6fb6"
-    primaryTextColor: "#ffffff"
-    primaryBorderColor: "#2c5590"
-    lineColor: "#8b949e"
-    textColor: "#4d86d6"
-    actorBkg: "#3b6fb6"
-    actorBorder: "#2c5590"
-    actorTextColor: "#ffffff"
-    actorLineColor: "#8b949e"
-    signalColor: "#8b949e"
-    signalTextColor: "#4d86d6"
-    noteBkgColor: "#3b6fb6"
-    noteTextColor: "#ffffff"
-    noteBorderColor: "#2c5590"
----
-flowchart LR
-    Browser["Browser<br/>React editor"]
-    Server["Node.js server<br/>HTTP API"]
-    Disk[("Folder of<br/>behavior XML files")]
-    Native["btcpp_validate<br/>BehaviorTree.CPP"]
-    Robot["BehaviorTree.ROS2 server<br/>via rosbridge WebSocket"]
-
-    Browser --> Server
-    Server --> Disk
-    Server --> Native
-    Browser --> Robot
-
-    classDef default fill:#3b6fb6,stroke:#2c5590,color:#ffffff
-```
+<!-- The source is diagrams/big-picture.mmd: change it, then run bin/render-diagrams.sh. -->
+<p align="center"><img src="diagrams/big-picture.svg" alt="The browser talks to the Node.js server, which owns the folder of behavior XML files and runs btcpp_validate, and to the BehaviorTree.ROS2 server through rosbridge." width="580"></p>
 
 - The **browser** talks to the server over a tiny JSON API: list the files, save one, delete one, validate, open another folder.
 - The **server** reads and writes files, and runs the native validator when it is built. It does not parse behaviors for the editor: the browser does.
@@ -90,39 +58,8 @@ The source code lives in [`src`](../src) and is split by where it runs:
 
 The dependencies point one way: everything may use `shared`, and `shared` uses nothing else.
 
-```mermaid
----
-config:
-  theme: base
-  themeVariables:
-    primaryColor: "#3b6fb6"
-    primaryTextColor: "#ffffff"
-    primaryBorderColor: "#2c5590"
-    lineColor: "#8b949e"
-    textColor: "#4d86d6"
-    actorBkg: "#3b6fb6"
-    actorBorder: "#2c5590"
-    actorTextColor: "#ffffff"
-    actorLineColor: "#8b949e"
-    signalColor: "#8b949e"
-    signalTextColor: "#4d86d6"
-    noteBkgColor: "#3b6fb6"
-    noteTextColor: "#ffffff"
-    noteBorderColor: "#2c5590"
----
-flowchart TD
-    client["client<br/>(React UI)"]
-    server["server<br/>(HTTP API)"]
-    cli["cli<br/>(validate.sh)"]
-    shared["shared<br/>(model, XML, checks)"]
-
-    client --> shared
-    server --> shared
-    cli --> shared
-    cli --> server
-
-    classDef default fill:#3b6fb6,stroke:#2c5590,color:#ffffff
-```
+<!-- The source is diagrams/packages.mmd: change it, then run bin/render-diagrams.sh. -->
+<p align="center"><img src="diagrams/packages.svg" alt="The client, the server and the cli all depend on shared, and the cli also on the server; shared depends on nothing." width="352"></p>
 
 The client also imports a few *types* from the server, such as the shape of the API responses, but never its code.
 
@@ -203,39 +140,8 @@ A file can change on disk while it is open in the editor: someone edits it by ha
 - saving sends the ETag of the version the edits are based on in `If-Match`, or `If-None-Match: *` for a new file, which must not exist yet;
 - if the file on disk is not that version, the server answers **412 Precondition Failed** with the ETag of what is there now, and writes nothing.
 
-```mermaid
----
-config:
-  theme: base
-  themeVariables:
-    primaryColor: "#3b6fb6"
-    primaryTextColor: "#ffffff"
-    primaryBorderColor: "#2c5590"
-    lineColor: "#8b949e"
-    textColor: "#4d86d6"
-    actorBkg: "#3b6fb6"
-    actorBorder: "#2c5590"
-    actorTextColor: "#ffffff"
-    actorLineColor: "#8b949e"
-    signalColor: "#8b949e"
-    signalTextColor: "#4d86d6"
-    noteBkgColor: "#3b6fb6"
-    noteTextColor: "#ffffff"
-    noteBorderColor: "#2c5590"
----
-sequenceDiagram
-    participant UI as Browser
-    participant API as Server
-
-    UI->>API: GET /api/workspace
-    API-->>UI: a.xml, ETag "v1"
-    Note over API: a.xml changes on disk: "v2"
-    UI->>API: PUT a.xml, If-Match "v1"
-    API-->>UI: 412, the ETag now is "v2"
-    UI->>UI: ask: overwrite, or reload?
-    UI->>API: PUT a.xml, If-Match "v2" (overwrite)
-    API-->>UI: 200, ETag "v3"
-```
+<!-- The source is diagrams/saving-safely.mmd: change it, then run bin/render-diagrams.sh. -->
+<p align="center"><img src="diagrams/saving-safely.svg" alt="The browser saves a.xml with the ETag it loaded; the file changed on disk, so the server answers 412 with the new ETag, and the browser overwrites only after asking." width="385"></p>
 
 The editor then asks what to do (`saveFile` in [`actions.ts`](../src/client/actions.ts)): overwrite the change, which saves again over the version just seen and nothing newer, or reload the file and drop the edits. Deleting a file works the same way.
 
@@ -245,38 +151,8 @@ The open folder is state of the server, shared by every tab connected to it. So 
 
 The editor's checks mirror BehaviorTree.CPP, but only the library knows for sure. [`validator/main.cpp`](../validator/main.cpp) is a small C++ program, built by `bin/build.sh` when the library is installed, that the server runs as a child process from [`src/server/native.ts`](../src/server/native.ts).
 
-```mermaid
----
-config:
-  theme: base
-  themeVariables:
-    primaryColor: "#3b6fb6"
-    primaryTextColor: "#ffffff"
-    primaryBorderColor: "#2c5590"
-    lineColor: "#8b949e"
-    textColor: "#4d86d6"
-    actorBkg: "#3b6fb6"
-    actorBorder: "#2c5590"
-    actorTextColor: "#ffffff"
-    actorLineColor: "#8b949e"
-    signalColor: "#8b949e"
-    signalTextColor: "#4d86d6"
-    noteBkgColor: "#3b6fb6"
-    noteTextColor: "#ffffff"
-    noteBorderColor: "#2c5590"
----
-sequenceDiagram
-    participant UI as Browser
-    participant API as Server
-    participant V as btcpp_validate
-
-    UI->>API: POST /api/validate (files, unsaved edits included)
-    API->>API: write the files and a manifest to a temporary folder
-    API->>V: btcpp_validate manifest.json
-    V->>V: register each declared model as a dummy node,<br/>register every file, create every tree
-    V-->>API: one JSON line per problem
-    API-->>UI: issues, with source "btcpp"
-```
+<!-- The source is diagrams/native-validator.mmd: change it, then run bin/render-diagrams.sh. -->
+<p align="center"><img src="diagrams/native-validator.svg" alt="The browser posts the files to the server, which writes them with a manifest to a temporary folder and runs btcpp_validate, whose problems come back as issues." width="528"></p>
 
 Because the application's C++ nodes are not available, the validator registers each node declared in a `<TreeNodesModel>` as a dummy with the declared ports. The library then checks the XML, the node types, the ports and the SubTrees exactly as it would on the robot. The same program, run with `--builtins`, prints the library's built-in nodes as JSON.
 
@@ -315,36 +191,8 @@ The preferences of the browser, such as the theme and the rosbridge URL, are in 
 
 Nothing derived is stored: the workspace and its issues are computed from the files by the `useAnalysis` hook in [`src/client/hooks.ts`](../src/client/hooks.ts), memoized on the files. The `App` calls it once and passes the result down to the panels. One edit therefore flows like this:
 
-```mermaid
----
-config:
-  theme: base
-  themeVariables:
-    primaryColor: "#3b6fb6"
-    primaryTextColor: "#ffffff"
-    primaryBorderColor: "#2c5590"
-    lineColor: "#8b949e"
-    textColor: "#4d86d6"
-    actorBkg: "#3b6fb6"
-    actorBorder: "#2c5590"
-    actorTextColor: "#ffffff"
-    actorLineColor: "#8b949e"
-    signalColor: "#8b949e"
-    signalTextColor: "#4d86d6"
-    noteBkgColor: "#3b6fb6"
-    noteTextColor: "#ffffff"
-    noteBorderColor: "#2c5590"
----
-flowchart TD
-    Click["User action, e.g. Delete"] --> Command["Command in actions.ts"]
-    Command --> Edit["store.edit(): clone + treeOps"]
-    Edit --> Files["files: the new document"]
-    Files --> Analysis["useAnalysis():<br/>buildWorkspace + validate"]
-    Files --> Views["Views: Tree, XML, Details"]
-    Analysis --> Views
-
-    classDef default fill:#3b6fb6,stroke:#2c5590,color:#ffffff
-```
+<!-- The source is diagrams/click-to-screen.mmd: change it, then run bin/render-diagrams.sh. -->
+<p align="center"><img src="diagrams/click-to-screen.svg" alt="A user action runs a command, which edits the store; the new files feed useAnalysis and the views, which also show the analysis." width="269"></p>
 
 This keeps the code simple, at the cost of rebuilding the index and re-running every check on every edit, which is fast for the tens of files a robot typically has.
 
