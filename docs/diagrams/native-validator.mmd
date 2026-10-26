@@ -1,0 +1,59 @@
+---
+config:
+  theme: base
+  fontFamily: "Arial, Helvetica, sans-serif"
+  sequence:
+    actorMargin: 24
+    width: 130
+    diagramMarginX: 10
+    boxMargin: 12
+    boxTextMargin: 8
+    messageMargin: 40
+    noteMargin: 22
+    labelBoxWidth: 56
+    labelBoxHeight: 28
+    messageFontSize: 16
+    actorFontSize: 16
+    noteFontSize: 15
+    wrap: false
+  themeVariables:
+    textColor: "#8b5cf6"
+    actorBkg: "#ede9fe"
+    actorBorder: "#7c3aed"
+    actorTextColor: "#4c1d95"
+    actorLineColor: "#a78bfa"
+    signalColor: "#8b949e"
+    signalTextColor: "#6e7781"
+    labelBoxBkgColor: "#ccfbf1"
+    labelBoxBorderColor: "#0d9488"
+    labelTextColor: "#134e4a"
+    loopTextColor: "#0d9488"
+    noteBkgColor: "#fef3c7"
+    noteBorderColor: "#d97706"
+    noteTextColor: "#78350f"
+    activationBkgColor: "#c4b5fd"
+    activationBorderColor: "#7c3aed"
+    mainBkg: "#ede9fe"
+    nodeBorder: "#7c3aed"
+    secondaryColor: "#ede9fe"
+    secondaryBorderColor: "#7c3aed"
+    secondaryTextColor: "#4c1d95"
+    tertiaryColor: "#ede9fe"
+    tertiaryBorderColor: "#7c3aed"
+    tertiaryTextColor: "#4c1d95"
+  themeCSS: >
+    svg, .label, .nodeLabel, .edgeLabel, foreignObject div { font-family: Arial, Helvetica, sans-serif; }
+    .actor { filter: drop-shadow(0 3px 6px rgba(15, 23, 42, 0.18)); }
+    rect.actor { rx: 12px; ry: 12px; }
+---
+sequenceDiagram
+    participant UI as Browser
+    participant API as Server
+    participant V as btcpp_validate
+
+    UI ->> API: POST /api/validate<br/>(files, unsaved<br/>edits included)
+    Note over API: write the files<br/>and a manifest to<br/>a temporary folder
+    API ->> V: btcpp_validate<br/>manifest.json
+    Note over V: register each declared<br/>model as a dummy node,<br/>register every file,<br/>create every tree
+    V -->> API: one JSON line<br/>per problem
+    API -->> UI: issues, with<br/>source "btcpp"
