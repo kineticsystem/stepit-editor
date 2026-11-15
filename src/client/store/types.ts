@@ -1,4 +1,4 @@
-// The state of the editor, split in three slices that share one store:
+// The state of the editor, split in four slices that share one store:
 //
 //   documents   the files, their edits and undo history, loading and saving
 //   navigation  what is selected, and the Back and Forward history

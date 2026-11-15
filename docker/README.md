@@ -1,4 +1,4 @@
-# Running the editor inside a docker container
+# Running the editor inside a Docker container
 
 The container user and password are:
 
@@ -6,7 +6,7 @@ The container user and password are:
 
 ## Prerequisites
 
-First, you must install `docker`.
+First, you must install Docker.
 
 ```bash
 curl -fsSL https://get.docker.com -o get-docker.sh
@@ -19,12 +19,15 @@ The container is defined in `docker-compose.yml`; `dock.sh` is a thin wrapper
 that supplies the container name, the host uid/gid and the folder of behaviors,
 then calls `docker compose`.
 
+In the commands below, `<container-name>` is the name we give the container,
+e.g. `editor`; every command needs it.
+
 Build the image and create the container. The image contains Node.js, pnpm and
 BehaviorTree.CPP, which is compiled from source, so the first build takes a few
 minutes:
 
 ```bash
-./docker/dock.sh [container-name] build
+./docker/dock.sh <container-name> build
 ```
 
 This is also how you pick up changes to the `Dockerfile`: it rebuilds only the
@@ -34,13 +37,13 @@ The quickest way to use the editor: install, build and serve it on
 <http://localhost:8080>, editing the behaviors in `folder`:
 
 ```bash
-./docker/dock.sh [container-name] serve [folder]
+./docker/dock.sh <container-name> serve [folder]
 ```
 
 Or start the container with an interactive shell:
 
 ```bash
-./docker/dock.sh [container-name] start [folder]
+./docker/dock.sh <container-name> start [folder]
 ```
 
 The folder of behaviors is mounted in the container at `~/behaviors`. It
@@ -52,13 +55,13 @@ change on a running container. Set `EDITOR_PORT` (default 8080) or `DEV_PORT`
 Run this to stop the container:
 
 ```bash
-./docker/dock.sh [container-name] stop
+./docker/dock.sh <container-name> stop
 ```
 
-Finally, run this to remove container and image:
+Finally, run this to remove the container and the image:
 
 ```bash
-./docker/dock.sh [container-name] clean
+./docker/dock.sh <container-name> clean
 ```
 
 ## Working with the code
@@ -71,11 +74,11 @@ update      # pnpm install
 build       # bundle the editor into dist/, build the BehaviorTree.CPP validator
 serve       # serve dist/ and the API on port 8080
 dev         # or: the Vite development server with hot reload, on port 5173
-test        # type-check and run the unit tests
+test        # type-check, run the unit tests and check the diagrams
 validate    # check ~/behaviors (or a given folder) from the command line
 ```
 
-From a non-interactive shell (e.g. `docker exec [container-name] build.sh`),
+From a non-interactive shell (e.g. `docker exec <container-name> build.sh`),
 call the scripts by their full names: `update.sh`, `build.sh`, and so on.
 
 The interactive shell setup -- the aliases -- lives in `docker/bashrc`, which

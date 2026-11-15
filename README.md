@@ -30,7 +30,7 @@ The StepIt Editor is a web application to edit the behavior trees of [BehaviorTr
 
 We need a computer with Ubuntu 24.04. The preferred way to run the editor is inside a Docker container, which also builds BehaviorTree.CPP for the full validation. Please refer to the document [Install Docker Engine on Ubuntu](https://docs.docker.com/engine/install/ubuntu/).
 
-If you want to run the editor on your host machine instead, you must install [Node.js](https://nodejs.org/) 24 and enable pnpm with `corepack enable`. The validation by BehaviorTree.CPP is then skipped, unless the library is installed too.
+If you want to run the editor on your host machine instead, you must install [Node.js](https://nodejs.org/) 24 and enable pnpm with `corepack enable`. The validation by BehaviorTree.CPP is then skipped, unless the library is installed too, under `/usr/local` or in the folder that `BTCPP_PREFIX` names.
 
 ## Install the StepIt Editor
 
@@ -45,7 +45,7 @@ git clone git@github.com:kineticsystem/stepit-editor.git
 The Docker container is defined in [`docker/docker-compose.yml`](docker/docker-compose.yml) and driven by the [`docker/dock.sh`](docker/dock.sh) script. See [docker/README.md](docker/README.md) for more details.
 
 > [!IMPORTANT]
-> The docker container provides a default user `developer` with password `developer`.
+> The Docker container provides a default user `developer` with password `developer`.
 
 Build the image and create the container. The first build compiles BehaviorTree.CPP, so it takes a few minutes:
 
@@ -53,7 +53,7 @@ Build the image and create the container. The first build compiles BehaviorTree.
 ./docker/dock.sh editor build
 ```
 
-Start the container with an interactive shell, giving it the folder of behaviors to edit. Without a folder, it opens the examples in [`behaviors`](behaviors):
+Start the container with an interactive shell, giving it the folder of behaviors to edit. Without a folder, it opens the one `BEHAVIORS_DIR` names, or the examples in [`behaviors`](behaviors) when it is not set:
 
 ```
 ./docker/dock.sh editor start ~/my_robot/behaviors
@@ -105,10 +105,10 @@ Without Docker, set the folder and the port with `BEHAVIORS_DIR` and `PORT`:
 BEHAVIORS_DIR=~/my_robot/behaviors PORT=8080 ./bin/serve.sh
 ```
 
-We can open another folder from the editor too, by clicking the folder path at the top left, among the folders of our home folder, or of `BEHAVIORS_BASE` when it is set. In Docker, the editor only sees the folder mounted when the container was started, at `~/behaviors`: to edit a folder outside it, start the container again with that folder, e.g. `./docker/dock.sh editor serve ~/other_robot/behaviors`.
+We can open another folder from the editor too, by clicking the folder path at the top left, among the folders of our home folder, or of `BEHAVIORS_BASE` when it is set. In Docker, the editor only sees the folders of the container: the folder mounted when the container was started, at `~/behaviors`, and the repository, at `~/ws`. To edit another folder of the host, start the container again with that folder, e.g. `./docker/dock.sh editor serve ~/other_robot/behaviors`.
 
 > [!IMPORTANT]
-> The server listens on all network interfaces, so anyone on the network can open it. On the host, add `HOST=127.0.0.1` to keep it to your machine.
+> The server listens on all network interfaces, so anyone on the network can open it. On the host, add `HOST=127.0.0.1` to keep it to your machine. The development server, `./bin/dev.sh`, does not read `HOST`: it always listens on all of them.
 
 ## Using the Editor
 
@@ -140,9 +140,9 @@ Unsaved changes are saved first, and StepIt Commander reads the tree files again
 
 ## How Files Are Read and Written
 
-All the XML files in the folder, sub-folders included, form one workspace, the way an application that registers every file in one `BehaviorTreeFactory` sees them: a SubTree can refer to a tree of any file, and a node type declared in any file's `<TreeNodesModel>` can be used everywhere. The editor declares new node types in the file that already declares the most (e.g. a `nodes.xml`).
+All the XML files in the folder, sub-folders included, except `node_modules` and the folders whose name starts with a dot, form one workspace, the way an application that registers every file in one `BehaviorTreeFactory` sees them: a SubTree can refer to a tree of any file, and a node type declared in any file's `<TreeNodesModel>` can be used everywhere. A node type created while adding a node is declared, unless we choose another file, in the file that already declares the most (e.g. a `nodes.xml`); the type of a node that is not declared yet is declared from its details, in the file of its tree.
 
-Saving rewrites the whole file with two-space indentation and one element per line. Comments are kept, and so are elements the editor does not know, such as `<include>`. Only BTCPP format 4 is supported.
+Saving rewrites the whole file with two-space indentation and one element per line. The comments of the trees and of `<root>` are kept, and so are the elements of `<root>` the editor does not know, such as `<include>`. Inside a `<TreeNodesModel>`, the comments and the elements that are not node models are dropped: the list of what a save does not keep is under [Parsing and Writing XML](docs/ARCHITECTURE.md#parsing-and-writing-xml) of the architecture document. Only BTCPP format 4 is supported.
 
 A file may change on disk while it is open, e.g. edited by hand, pulled from Git or saved from another tab. The editor never overwrites such a change unseen: saving asks whether to overwrite it or to reload the file and drop our edits. Reloading the folder keeps our unsaved edits, and tells which of their files changed on disk.
 
@@ -151,7 +151,7 @@ A file may change on disk while it is open, e.g. edited by hand, pulled from Git
 Two layers, both run on unsaved edits too:
 
 1. **The editor's checks** run on every change and mark the offending rows: XML syntax, unknown node types, the number of children per node (a Decorator has one, IfThenElse two or three, Switch3 four…), unknown ports, input ports without a value or default, literals of the wrong type (`num_cycles="many"`), output ports that are not `{blackboard}` references, SubTrees pointing to missing trees, recursive SubTrees, duplicate tree IDs, a `main_tree_to_execute` that does not exist, and a subtree that no tree includes, which never runs.
-2. **BehaviorTree.CPP itself** (the *Check with BehaviorTree.CPP* button): the program in `validator/` registers each declared node type as a dummy with its declared ports, registers every file and instantiates every tree, then reports what the library refuses. This catches whatever the first layer misses, with the library's own messages. It needs the library, so it is built in the container only.
+2. **BehaviorTree.CPP itself** (the *Check with BehaviorTree.CPP* button): the program in `validator/` registers each declared node type as a dummy with its declared ports, registers every file and instantiates every tree, then reports what the library refuses. This catches whatever the first layer misses, with the library's own messages. It needs the library, so `build` skips it where the library is not installed, and the button is then disabled.
 
 The same checks run from the command line, e.g. in CI or a pre-commit hook; the exit code is 1 on any error. Inside the container:
 
@@ -180,7 +180,7 @@ The editor reads and writes the folder through a small HTTP API, which the serve
 
 To try the API by hand in [Postman](https://www.postman.com/) instead, import the description: **Import**, paste `http://localhost:8080/api/openapi.json`, and choose to generate a collection. Postman makes a request for every endpoint, with its parameters and example bodies, ready to send to the address it imported the description from. Use the desktop app: the web version of Postman cannot reach `localhost` without the Postman Desktop Agent.
 
-The documentation and the description are served on the port of the editor, so use the host port chosen with `EDITOR_PORT`, `5173` with the development server, and the address of the machine rather than `localhost` from another computer. The documentation is served with the editor and needs no internet connection.
+The documentation and the description are served on the port of the editor, so use the host port chosen with `EDITOR_PORT`, the port of the development server when it runs, `5173` or the host port chosen with `DEV_PORT`, and the address of the machine rather than `localhost` from another computer. The documentation is served with the editor and needs no internet connection.
 
 > [!WARNING]
 > The requests act on the open folder: trying a `PUT` or a `DELETE` changes the files on disk.
@@ -192,7 +192,7 @@ The description is written by hand in [`src/server/openapi.ts`](src/server/opena
 To learn how the editor is built, start with [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ```
-bin/          update, build, serve, dev, test and validate scripts
+bin/          update, build, serve, dev, test and validate scripts, and the two that render and check the diagrams
 docker/       the container
 behaviors/    example behaviors, the default folder
 src/shared/   XML model, parser and writer, workspace index, checks (browser and Node.js)
@@ -201,7 +201,7 @@ src/client/   the React editor
 src/cli/      the command line validator, run by bin/validate.sh
 validator/    the BehaviorTree.CPP validator (C++)
 tests/        unit tests (vitest)
-docs/         the architecture document and the screenshot
+docs/         the architecture document with its diagrams, its review and the screenshots
 ```
 
 ## Monitoring a Run from Another Server
@@ -222,7 +222,7 @@ To let the editor follow the runs that other clients start, and show a run to a 
  "progress": {}, "running": true}
 ```
 
-- `run`: a number of the run, also sent in the first feedback message, so that the editor tells its own run on the topic.
+- `run`: a number of the run, also sent in the first feedback message, so that the editor can tell which run on the topic is its own.
 - `nodes`: every node that has run, with its last status.
 - `running` false once it ended, with `status`, how the tree ended, `SUCCESS` or `FAILURE`, `cancelled`, and `message`, e.g. why it was preempted.
 
