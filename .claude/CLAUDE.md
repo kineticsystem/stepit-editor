@@ -25,7 +25,7 @@ On the host, with Node.js 24 and `corepack enable`, call the scripts by path, e.
 
 ## Architecture
 
-It follows one idea: **the XML files are the truth**. The editor reads them into a model, lets us change the model, and writes them back with nothing lost.
+It follows one idea: **the XML files are the truth**. The editor reads them into a model, lets us change the model, and writes them back, keeping what it does not edit.
 
 | Folder | Runs in | Rule |
 |---|---|---|
@@ -39,7 +39,7 @@ The dependencies point one way: everything may use `shared`, and `shared` uses n
 
 Easy to break:
 
-- **Nothing is lost on save.** Comments and unknown elements, e.g. `<include>`, are kept; only BTCPP format 4 is supported. A change to the parser or the writer needs a round-trip test.
+- **What a save keeps.** The comments of the trees and of `<root>`, and the elements of `<root>` the editor does not know, e.g. `<include>`, are kept. Inside a `<TreeNodesModel>`, the comments and the elements that are not node models are dropped: the list is under Parsing and Writing XML of [docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md#parsing-and-writing-xml). Only BTCPP format 4 is supported. A change to the parser or the writer needs a round-trip test.
 - **A file changed on disk is never overwritten unseen**: saving asks whether to overwrite or reload.
 - **Only the main tree of a file is an objective** (`main_tree_to_execute`); the others are subtrees, which cannot be run, as in StepIt Commander.
 - **The payload of a tree** is declared as the ports of its own `<SubTree>` model in a `<TreeNodesModel>`, the example after `e.g.` in the description.
