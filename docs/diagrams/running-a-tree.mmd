@@ -1,0 +1,64 @@
+---
+config:
+  theme: base
+  fontFamily: "Arial, Helvetica, sans-serif"
+  sequence:
+    actorMargin: 24
+    width: 130
+    diagramMarginX: 10
+    boxMargin: 12
+    boxTextMargin: 8
+    messageMargin: 40
+    noteMargin: 22
+    labelBoxWidth: 56
+    labelBoxHeight: 28
+    messageFontSize: 16
+    actorFontSize: 16
+    noteFontSize: 15
+    wrap: false
+  themeVariables:
+    textColor: "#8b5cf6"
+    actorBkg: "#ede9fe"
+    actorBorder: "#7c3aed"
+    actorTextColor: "#4c1d95"
+    actorLineColor: "#a78bfa"
+    signalColor: "#8b949e"
+    signalTextColor: "#6e7781"
+    labelBoxBkgColor: "#ccfbf1"
+    labelBoxBorderColor: "#0d9488"
+    labelTextColor: "#134e4a"
+    loopTextColor: "#0d9488"
+    noteBkgColor: "#fef3c7"
+    noteBorderColor: "#d97706"
+    noteTextColor: "#78350f"
+    activationBkgColor: "#c4b5fd"
+    activationBorderColor: "#7c3aed"
+    mainBkg: "#ede9fe"
+    nodeBorder: "#7c3aed"
+    secondaryColor: "#ede9fe"
+    secondaryBorderColor: "#7c3aed"
+    secondaryTextColor: "#4c1d95"
+    tertiaryColor: "#ede9fe"
+    tertiaryBorderColor: "#7c3aed"
+    tertiaryTextColor: "#4c1d95"
+  themeCSS: >
+    svg, .label, .nodeLabel, .edgeLabel, foreignObject div { font-family: Arial, Helvetica, sans-serif; }
+    .actor { filter: drop-shadow(0 3px 6px rgba(15, 23, 42, 0.18)); }
+    rect.actor { rx: 12px; ry: 12px; }
+---
+sequenceDiagram
+    participant API as Server
+    participant UI as Browser
+    participant C as StepIt Commander<br/>through rosbridge
+
+    UI ->> C: subscribe<br/>/stepit_server/execution
+    Note over UI: Run, then the<br/>payload dialog
+    UI ->> API: PUT every<br/>unsaved file
+    API -->> UI: 200, new ETags
+    UI ->> C: send_action_goal<br/>(tree, payload)
+    C -->> UI: action_feedback, the first:<br/>run, tree, statuses
+    loop while the tree runs
+        C -->> UI: publish: the whole run,<br/>every node with its status
+    end
+    C -->> UI: action_result
+    Note over UI: the run ends: Succeeded,<br/>Failed or Stopped
